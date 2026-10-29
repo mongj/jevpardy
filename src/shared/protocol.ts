@@ -21,7 +21,7 @@ export interface GameSettings {
 /** lastStanding: one timed player left; allOut: everyone eliminated or tapped out; cleared: Jev says nothing is left to name. */
 export type EndReason = "lastStanding" | "allOut" | "host" | "cleared";
 
-export type TierId = "easy" | "normal" | "hard" | "boss" | "secret";
+export type TierId = "npc" | "powerup" | "sidequest" | "easteregg" | "jevillion";
 
 export type RejectReason = "invalid" | "duplicate" | "judge_error";
 

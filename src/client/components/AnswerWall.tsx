@@ -25,7 +25,7 @@ export function AnswerWall({ answers, players, highlightId }: { answers: Accepte
               >
                 <span className="chip-dot" aria-hidden="true" />
                 <span className="chip-text">{a.text}</span>
-                {a.tier !== "easy" && a.tier !== "normal" && <span className="chip-tier">{tier.name}</span>}
+                {a.tier !== "npc" && a.tier !== "powerup" && <span className="chip-tier">{tier.name}</span>}
               </li>
             );
           })}

@@ -1146,14 +1146,14 @@ input.answer-input:disabled {
   font-size: 7px;
   color: var(--tier);
 }
-.chip.tier-hard,
-.chip.tier-boss,
-.chip.tier-secret {
+.chip.tier-sidequest,
+.chip.tier-easteregg,
+.chip.tier-jevillion {
   box-shadow:
     inset 0 0 0 2px var(--tier),
     0 0 10px color-mix(in srgb, var(--tier) 45%, transparent);
 }
-.chip.tier-secret {
+.chip.tier-jevillion {
   animation: shimmer 1.2s steps(4) infinite;
 }
 @keyframes shimmer {

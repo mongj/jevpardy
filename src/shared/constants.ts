@@ -46,11 +46,11 @@ export interface Tier {
 
 /** Ordered common → obscure; index matches Jev's Score level. */
 export const TIERS: readonly Tier[] = [
-  { id: "easy", name: "EASY", points: 10, blurb: "The one everybody blurts out.", color: "#9fb3d9" },
-  { id: "normal", name: "NORMAL", points: 25, blurb: "Well known. A solid pick.", color: "#3ef0ff" },
-  { id: "hard", name: "HARD", points: 50, blurb: "Genuinely uncommon. Nice one.", color: "#ff4fd8" },
-  { id: "boss", name: "BOSS LEVEL", points: 80, blurb: "True obscurity. Hardly anyone gets this far.", color: "#b48cff" },
-  { id: "secret", name: "SECRET LEVEL", points: 100, blurb: "Hidden in the code. Absurd.", color: "#ffd23f" },
+  { id: "npc", name: "NPC", points: 10, blurb: "The one everybody blurts out.", color: "#9fb3d9" },
+  { id: "powerup", name: "POWER-UP", points: 25, blurb: "Well known. A solid pick.", color: "#3ef0ff" },
+  { id: "sidequest", name: "SIDE QUEST", points: 50, blurb: "Off the beaten path. Nice one.", color: "#ff4fd8" },
+  { id: "easteregg", name: "EASTER EGG", points: 80, blurb: "Hidden in the code. Few ever find it.", color: "#b48cff" },
+  { id: "jevillion", name: "1 IN A JEVILLION", points: 100, blurb: "Absurd. Even Jev is impressed.", color: "#ffd23f" },
 ];
 
 export function tierById(id: TierId): Tier {
