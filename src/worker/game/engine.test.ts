@@ -40,9 +40,9 @@ function makeCtx(): Ctx & { advance: (ms: number) => void } {
   return ctx;
 }
 
-const ACCEPT: Decision = { accepted: true, reason: null, duplicateOf: null, confidence: 0.95, tier: "npc", boardCleared: false };
+const ACCEPT: Decision = { accepted: true, reason: null, duplicateOf: null, confidence: 0.95, tier: "basic", boardCleared: false };
 const CLEARS: Decision = { ...ACCEPT, boardCleared: true };
-const REJECT: Decision = { accepted: false, reason: "invalid", duplicateOf: null, confidence: 0.1, tier: "npc", boardCleared: false };
+const REJECT: Decision = { accepted: false, reason: "invalid", duplicateOf: null, confidence: 0.1, tier: "basic", boardCleared: false };
 
 function setup(settings: Partial<GameSettings>, names = ["Ada", "Bo"]) {
   const ctx = makeCtx();
@@ -161,7 +161,7 @@ describe("timed mode", () => {
     const { state, ctx } = setup({ mode: "timed" });
     start(state, state.hostId!, ctx);
     const first = current(state);
-    const events = answer(state, ctx, "Paris", { ...ACCEPT, tier: "sidequest" });
+    const events = answer(state, ctx, "Paris", { ...ACCEPT, tier: "rare" });
     expect(events.map((e) => e.type)).toEqual(["judging", "accepted", "turnStarted"]);
     expect(state.players.find((p) => p.id === first)!.points).toBe(50);
     expect(state.answers.map((a) => a.text)).toEqual(["Paris"]);
@@ -295,11 +295,11 @@ describe("free mode", () => {
 });
 
 describe("decide", () => {
-  const answers = [{ id: "a1", text: "München", playerId: "p", tier: "npc" as const, points: 10, at: 0, confidence: 1 }];
+  const answers = [{ id: "a1", text: "München", playerId: "p", tier: "basic" as const, points: 10, at: 0, confidence: 1 }];
   const base: Extract<JudgeOutput, { ok: true }> = { ok: true, validity: 0.9, obscurity: 2.4, exhausted: 0.02, duplicates: [] };
 
   it("applies thresholds and tiers", () => {
-    expect(decide(base, THRESHOLDS, answers)).toMatchObject({ accepted: true, tier: "sidequest" });
+    expect(decide(base, THRESHOLDS, answers)).toMatchObject({ accepted: true, tier: "rare" });
     expect(decide({ ...base, validity: 0.5 }, THRESHOLDS, answers)).toMatchObject({ accepted: false, reason: "invalid" });
   });
 

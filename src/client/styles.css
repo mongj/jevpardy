@@ -1157,8 +1157,8 @@ input.answer-input:disabled {
   font-size: 7px;
   color: var(--tier);
 }
-.chip.tier-sidequest,
-.chip.tier-easteregg,
+.chip.tier-rare,
+.chip.tier-superrare,
 .chip.tier-jevillion {
   box-shadow:
     inset 0 0 0 2px var(--tier),

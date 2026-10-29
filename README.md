@@ -39,10 +39,10 @@ Jev rates every accepted answer's obscurity on a five-level scale:
 
 | Tier | Points | |
 |---|---|---|
-| NPC | 10 | The one everybody blurts out |
-| POWER-UP | 25 | Well known |
-| SIDE QUEST | 50 | Off the beaten path |
-| EASTER EGG | 80 | Hidden; few ever find it |
+| BASIC | 10 | The one everybody blurts out |
+| SOLID | 25 | Well known |
+| RARE | 50 | Genuinely uncommon |
+| SUPER RARE | 80 | True obscurity |
 | 1 IN A JEVILLION | 100 | Almost nobody would think of it |
 
 In timed mode, points also fill a **1UP meter**: every 200 points earns +1 ♥, up to 5.

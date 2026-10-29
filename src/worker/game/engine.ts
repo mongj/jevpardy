@@ -641,7 +641,7 @@ export interface Decision {
 
 export function decide(output: JudgeOutput, thresholds: Thresholds, answers: AcceptedAnswer[]): Decision {
   if (!output.ok) {
-    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "npc", boardCleared: false };
+    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", boardCleared: false };
   }
   const tierLevel = Math.min(TIERS.length - 1, Math.max(0, Math.round(output.obscurity)));
   const tier = TIERS[tierLevel]!.id;
@@ -882,7 +882,7 @@ export function overrule(state: RoomState, actorId: string, verdictId: string, c
   }
   state.log.pop();
   touch(state, ctx);
-  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "npc", confidence: last.confidence, boardCleared: false }, true, ctx);
+  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", confidence: last.confidence, boardCleared: false }, true, ctx);
   return { ok: true, events };
 }
 

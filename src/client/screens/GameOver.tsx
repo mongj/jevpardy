@@ -121,7 +121,7 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
                 <td>{p.stats.accepted}</td>
                 <td>{p.stats.rejected}</td>
                 <td>{survival(p, state)}</td>
-                <td className="hide-sm">{p.stats.bestAnswer ? <span style={{ color: tierById(p.stats.bestTier ?? "npc").color }}>{p.stats.bestAnswer}</span> : "–"}</td>
+                <td className="hide-sm">{p.stats.bestAnswer ? <span style={{ color: tierById(p.stats.bestTier ?? "basic").color }}>{p.stats.bestAnswer}</span> : "–"}</td>
               </tr>
             ))}
           </tbody>
