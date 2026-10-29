@@ -102,7 +102,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
               <div>
                 <p className="stage-name">{myTurn ? <Blink>YOUR TURN!</Blink> : `${current.name}'S TURN`}</p>
                 <p className="small muted">
-                  LAP {state.lap} · TRY {turn.attempts + (turn.judging ? 0 : 1)}
+                  ROUND {state.lap} · ATTEMPT {turn.attempts + (turn.judging ? 0 : 1)}
                 </p>
               </div>
             </div>
