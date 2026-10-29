@@ -175,7 +175,6 @@ const ICONS = {
   soundOn: ["...X...X.", "..XX.X..X", "XXXX..X.X", "XXXX..X.X", "XXXX..X.X", "..XX.X..X", "...X...X."],
   soundOff: ["...X.....", "..XX.....", "XXXX.X.X.", "XXXX..X..", "XXXX.X.X.", "..XX.....", "...X....."],
   hand: [".X.X.X.", ".X.X.X.", ".XXXXX.", "XXXXXX.", ".XXXXX.", ".XXXXX.", "..XXX.."],
-  gear: ["X..X..X", ".XXXXX.", ".XX.XX.", "XX...XX", ".XX.XX.", ".XXXXX.", "X..X..X"],
   skip: ["X...X..X", "XX..XX.X", "XXX.XXXX", "XXXXXXXX", "XXX.XXXX", "XX..XX.X", "X...X..X"],
   stop: [".....", "XXXXX", "XXXXX", "XXXXX", "XXXXX", "XXXXX", "....."],
   close: ["XX...XX", "XXX.XXX", ".XXXXX.", "..XXX..", ".XXXXX.", "XXX.XXX", "XX...XX"],

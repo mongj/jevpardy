@@ -1308,16 +1308,29 @@ input.answer-input {
 .emote-btn:active {
   transform: scale(0.9);
 }
-.host-btn {
-  font-family: var(--display);
-  font-size: 9px;
-  color: var(--yellow);
-}
-.host-menu {
+.host-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   display: flex;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
+  padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  background: var(--panel);
+  box-shadow: 0 calc(-1 * var(--px)) 0 0 var(--yellow);
+}
+.host-bar .px-btn {
+  flex: 1;
+  max-width: 220px;
+}
+/* Room for the fixed host bar so it never covers the last row of content. */
+.game.with-host-bar {
+  padding-bottom: 84px;
+}
+body:has(.host-bar) .mock-badge {
+  bottom: 84px;
 }
 
 .emote-layer {

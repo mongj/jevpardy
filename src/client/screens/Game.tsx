@@ -45,7 +45,6 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
   const isHost = state.hostId === meId;
   const timed = state.settings.mode === "timed";
   const [draft, setDraft] = useState("");
-  const [hostMenu, setHostMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
 
@@ -82,7 +81,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
   const out = me?.status === "eliminated" || me?.status === "tappedOut";
 
   return (
-    <div className="game">
+    <div className={`game ${isHost ? "with-host-bar" : ""}`}>
       <div className="topic-banner">
         <span className="label">NAME</span>
         <span className="topic-text">{state.topic}</span>
@@ -202,14 +201,9 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
             <EmoteArt emote={e} />
           </button>
         ))}
-        {isHost && (
-          <button type="button" className="emote-btn host-btn" onClick={() => setHostMenu((v) => !v)} aria-expanded={hostMenu}>
-            <Icon name="gear" /> HOST
-          </button>
-        )}
       </div>
-      {isHost && hostMenu && (
-        <div className="host-menu panel accent-yellow">
+      {isHost && (
+        <div className="host-bar" role="group" aria-label="Host controls">
           <PixelButton tone="cyan" onClick={() => send({ type: "skip" })} disabled={!turn || !!turn.judging}>
             <Icon name="skip" /> SKIP TURN
           </PixelButton>
