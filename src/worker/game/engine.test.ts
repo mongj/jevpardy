@@ -15,7 +15,6 @@ import {
   join,
   kick,
   nextAlarmAt,
-  overrule,
   resolve,
   setShortList,
   start,
@@ -235,18 +234,6 @@ describe("timed mode", () => {
     expect(nextAlarmAt(state)).toBe(ctx.now + 8_000);
   });
 
-  it("lets the host overrule and refunds the life", () => {
-    const { state, ctx } = setup({ mode: "timed", wrongAnswer: "life", lives: 2 });
-    start(state, state.hostId!, ctx);
-    const victim = current(state);
-    answer(state, ctx, "Zurich", REJECT);
-    const verdict = state.log[state.log.length - 1]!;
-    const r = overrule(state, state.hostId!, verdict.id, ctx);
-    expect(r.ok).toBe(true);
-    const p = state.players.find((x) => x.id === victim)!;
-    expect(p.lives).toBe(2);
-    expect(state.answers.map((a) => a.text)).toEqual(["Zurich"]);
-  });
 
   it("skips past a kicked current player", () => {
     const { state, ctx } = setup({ mode: "timed" }, ["Ada", "Bo", "Cy"]);
@@ -335,18 +322,6 @@ describe("shared helpers", () => {
       turnSeconds: 5,
       mode: "timed",
     });
-  });
-});
-
-describe("overrule guard", () => {
-  it("refuses to overrule an exact repeat", () => {
-    const { state, ctx } = setup({ mode: "timed" });
-    start(state, state.hostId!, ctx);
-    answer(state, ctx, "Paris");
-    ctx.advance(1000);
-    answer(state, ctx, "paris");
-    const verdict = state.log[state.log.length - 1]!;
-    expect(overrule(state, state.hostId!, verdict.id, ctx)).toMatchObject({ ok: false });
   });
 });
 

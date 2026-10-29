@@ -15,7 +15,6 @@ import {
   join,
   kick,
   nextAlarmAt,
-  overrule,
   rematch,
   resolve,
   setShortList,
@@ -162,8 +161,6 @@ export class GameRoom extends DurableObject<Env> {
       }
       case "skip":
         return this.apply(ws, skip(room, playerId, ctx));
-      case "overrule":
-        return this.apply(ws, overrule(room, playerId, typeof msg.verdictId === "string" ? msg.verdictId : "", ctx));
       case "end":
         return this.apply(ws, end(room, playerId, ctx));
       case "rematch": {

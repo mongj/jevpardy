@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_ANSWER_LENGTH } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
-import { normalizeAnswer } from "../../shared/sanitize.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
 import { Countdown, Fuse } from "../components/Countdown.tsx";
 import { JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
@@ -20,7 +19,7 @@ interface GameProps {
 }
 
 function verdictLine(v: Verdict, name: string): string {
-  if (v.accepted) return `${name}: "${v.text}" ✔${v.overruled ? " (host overrule)" : ""}`;
+  if (v.accepted) return `${name}: "${v.text}" ✔`;
   switch (v.reason) {
     case "duplicate":
       return `${name}: "${v.text}" ✘ repeat${v.duplicateOf ? ` of "${v.duplicateOf}"` : ""}`;
@@ -35,13 +34,6 @@ function verdictLine(v: Verdict, name: string): string {
       return String(unknown);
     }
   }
-}
-
-/** Exact repeats can't be overruled; Jev's validity calls and fuzzy duplicate calls can. */
-function isOverrulable(v: Verdict): boolean {
-  if (v.accepted) return false;
-  if (v.reason === "invalid") return true;
-  return v.reason === "duplicate" && !!v.duplicateOf && normalizeAnswer(v.duplicateOf) !== normalizeAnswer(v.text);
 }
 
 export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, inputShakeKey }: GameProps) {
@@ -82,7 +74,6 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
   };
 
   const lastVerdict = state.log[state.log.length - 1];
-  const canOverrule = isHost && !!lastVerdict && isOverrulable(lastVerdict) && !turn?.judging;
   const nameOf = (id: string) => state.players.find((p) => p.id === id)?.name ?? "?";
   const liveText = turn?.judging?.text ?? (turn ? typing[turn.playerId] : undefined);
   const out = me?.status === "eliminated" || me?.status === "tappedOut";
@@ -183,17 +174,6 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
           </button>
         )}
       </div>
-
-      {canOverrule && lastVerdict && (
-        <div className="overrule">
-          <span className="small">
-            Jev bounced <b>"{lastVerdict.text}"</b>
-          </span>
-          <PixelButton tone="pink" onClick={() => send({ type: "overrule", verdictId: lastVerdict.id })}>
-            OVERRULE ✔
-          </PixelButton>
-        </div>
-      )}
 
       <div className="game-grid">
         <AnswerWall answers={state.answers} players={state.players} highlightId={freshAnswerId} />

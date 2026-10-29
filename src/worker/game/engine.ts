@@ -85,11 +85,6 @@ interface TurnRecord {
   attempts: number;
 }
 
-interface VerdictRecord extends Verdict {
-  /** Whether this rejection cost a life (so an overrule can refund it). */
-  costLife: boolean;
-}
-
 export interface RoomState {
   version: 1;
   code: string;
@@ -112,7 +107,7 @@ export interface RoomState {
   startingPlayers: number;
   answers: AcceptedAnswer[];
   answerKeys: string[];
-  log: VerdictRecord[];
+  log: Verdict[];
   createdAt: number;
   startedAt: number | null;
   endedAt: number | null;
@@ -607,7 +602,7 @@ export function submit(state: RoomState, playerId: string, rawText: string, ctx:
   const exactIdx = key ? state.answerKeys.indexOf(key) : -1;
   if (exactIdx !== -1) {
     const original = state.answers[exactIdx]!;
-    const verdict = recordRejection(state, player, text, "duplicate", original.text, 1, null, false, ctx);
+    const verdict = recordRejection(state, player, text, "duplicate", original.text, 1, null, ctx);
     return { ok: true, events: [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)], judge: null };
   }
 
@@ -676,10 +671,10 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
   if (!player) return advanceTurn(state, turn.playerId, ctx);
 
   if (decision.accepted) {
-    return acceptAnswer(state, player, text, decision, false, ctx);
+    return acceptAnswer(state, player, text, decision, ctx);
   }
   if (decision.reason === "judge_error") {
-    const verdict = recordRejection(state, player, text, "judge_error", null, 0, null, false, ctx);
+    const verdict = recordRejection(state, player, text, "judge_error", null, 0, null, ctx);
     return [{ type: "rejected", verdict }];
   }
   const verdict = recordRejection(
@@ -690,7 +685,6 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
     decision.duplicateOf,
     decision.confidence,
     decision.tier,
-    false,
     ctx,
   );
   return [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)];
@@ -701,7 +695,6 @@ function acceptAnswer(
   player: PlayerRecord,
   text: string,
   decision: Pick<Decision, "tier" | "confidence" | "boardCleared">,
-  overruled: boolean,
   ctx: Ctx,
 ): GameEvent[] {
   const tier = tierById(decision.tier);
@@ -741,11 +734,9 @@ function acceptAnswer(
     tier: tier.id,
     at: ctx.now,
     turnId: state.turn?.id ?? 0,
-    overruled,
-    costLife: false,
   });
 
-  const events: GameEvent[] = [{ type: "accepted", answer, overruled }];
+  const events: GameEvent[] = [{ type: "accepted", answer }];
   if (state.settings.mode === "timed") {
     player.meter += tier.points;
     while (player.meter >= BONUS_LIFE_POINTS) {
@@ -774,12 +765,11 @@ function recordRejection(
   duplicateOf: string | null,
   confidence: number,
   tier: TierId | null,
-  costLife: boolean,
   ctx: Ctx,
-): VerdictRecord {
+): Verdict {
   if (reason === "duplicate") player.stats.duplicates += 1;
   if (reason !== "judge_error") player.stats.rejected += 1;
-  const verdict: VerdictRecord = {
+  const verdict: Verdict = {
     id: ctx.newId(),
     playerId: player.id,
     text,
@@ -790,21 +780,18 @@ function recordRejection(
     tier,
     at: ctx.now,
     turnId: state.turn?.id ?? 0,
-    overruled: false,
-    costLife,
   };
   pushLog(state, verdict);
   return verdict;
 }
 
-function pushLog(state: RoomState, verdict: VerdictRecord): void {
+function pushLog(state: RoomState, verdict: Verdict): void {
   state.log.push(verdict);
   if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
 }
 
-function applyWrongAnswerRule(state: RoomState, player: PlayerRecord, verdict: VerdictRecord, ctx: Ctx): GameEvent[] {
+function applyWrongAnswerRule(state: RoomState, player: PlayerRecord, verdict: Verdict, ctx: Ctx): GameEvent[] {
   if (state.settings.mode !== "timed" || state.settings.wrongAnswer !== "life") return [];
-  verdict.costLife = true;
   return loseLife(state, player, verdict.reason === "duplicate" ? "duplicate" : "wrong", ctx);
 }
 
@@ -853,37 +840,6 @@ export function skip(state: RoomState, actorId: string, ctx: Ctx): Result {
   state.turn = null;
   touch(state, ctx);
   return { ok: true, events: [{ type: "skipped", playerId: skipped }, ...advanceTurn(state, skipped, ctx)] };
-}
-
-/** Host overturns the latest rejection: credits the answer and refunds any life it cost. */
-export function overrule(state: RoomState, actorId: string, verdictId: string, ctx: Ctx): Result {
-  if (!isHost(state, actorId)) return fail("not_host", "Only the host can overrule Jev.");
-  if (state.phase !== "playing") return fail("wrong_phase", "No game in progress.");
-  const last = state.log[state.log.length - 1];
-  if (!last || last.id !== verdictId || last.accepted || last.reason === "judge_error") {
-    return fail("bad_message", "Only the latest rejection can be overruled.");
-  }
-  if (last.reason === "duplicate" && state.answerKeys.includes(normalizeAnswer(last.text))) {
-    return fail("bad_message", "That exact answer is already on the board.");
-  }
-  const player = findPlayer(state, last.playerId);
-  if (!player) return fail("not_found", "Unknown player.");
-  if (state.turn?.judging) return fail("already_judging", "Wait for Jev's verdict first.");
-  last.overruled = true;
-  player.stats.rejected = Math.max(0, player.stats.rejected - 1);
-  if (last.reason === "duplicate") player.stats.duplicates = Math.max(0, player.stats.duplicates - 1);
-  if (last.costLife) {
-    player.lives += 1;
-    player.stats.livesLost = Math.max(0, player.stats.livesLost - 1);
-    if (player.status === "eliminated") {
-      player.status = "alive";
-      player.outAt = null;
-    }
-  }
-  state.log.pop();
-  touch(state, ctx);
-  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", confidence: last.confidence, boardCleared: false }, true, ctx);
-  return { ok: true, events };
 }
 
 export function end(state: RoomState, actorId: string, ctx: Ctx): Result {
@@ -1029,7 +985,7 @@ export function toPublic(state: RoomState): PublicState {
     turnOrder: state.turnOrder,
     lap: state.lap,
     answers: state.answers,
-    log: state.log.map(({ costLife: _c, ...v }) => v),
+    log: state.log,
     startedAt: state.startedAt,
     endedAt: state.endedAt,
     winnerId: state.winnerId,

@@ -94,7 +94,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
             flashMood(idx >= 3 ? "shocked" : "happy");
             f?.burst({
               text: `+${e.answer.points}`,
-              sub: `${tier.name}${e.overruled ? " · OVERRULED" : ""}`,
+              sub: tier.name,
               color: tier.color,
               kind: idx >= 2 ? "big" : "pop",
             });

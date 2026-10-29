@@ -100,7 +100,6 @@ export interface Verdict {
   tier: TierId | null;
   at: number;
   turnId: number;
-  overruled: boolean;
 }
 
 export interface Award {
@@ -147,7 +146,7 @@ export type GameEvent =
   | { type: "gameStarted" }
   | { type: "turnStarted"; playerId: string; turnId: number }
   | { type: "judging"; playerId: string; text: string }
-  | { type: "accepted"; answer: AcceptedAnswer; overruled: boolean }
+  | { type: "accepted"; answer: AcceptedAnswer }
   | { type: "rejected"; verdict: Verdict }
   | { type: "lifeLost"; playerId: string; reason: LifeLostReason; livesLeft: number }
   | { type: "lifeEarned"; playerId: string; lives: number }
@@ -170,7 +169,6 @@ export type ClientMessage =
   | { type: "tapOut" }
   | { type: "kick"; playerId: string }
   | { type: "skip" }
-  | { type: "overrule"; verdictId: string }
   | { type: "end" }
   | { type: "rematch"; topic?: string }
   | { type: "emote"; emote: Emote }
