@@ -2,6 +2,9 @@
 
 export const DEFAULT_ACCEPT_THRESHOLD = 0.7;
 export const DEFAULT_DUPLICATE_THRESHOLD = 0.75;
+// Measured on jev-1.14 over five short topics: finished lists scored 0.53–0.92, lists missing one
+// item 0.04–0.46. Set high because ending a game early is worse than missing the end.
+export const DEFAULT_EXHAUSTED_THRESHOLD = 0.5;
 /** Below this P(spelled correctly) an accepted answer gets a "typo forgiven" badge. */
 export const TYPO_THRESHOLD = 0.3;
 /** Below this the host is warned the topic may be hard to list examples of. */
@@ -43,6 +46,14 @@ export const OBSCURITY_QUESTION = {
 /** Asked once per prior accepted answer, with that answer in `previous_answer`. */
 export const DUPLICATE_QUESTION =
   "Do `submitted_answer` and `previous_answer` refer to the same thing, allowing for misspellings, translations, abbreviations, or alternative names?";
+
+/**
+ * Asked with every judgment, alongside the answers already on the board. Phrased as "is anything left?"
+ * (and inverted) because Jev separates finished and unfinished lists more sharply that way than when
+ * asked "is the list complete?".
+ */
+export const REMAINING_QUESTION =
+  "Is there still at least one real example of `topic` that appears in neither `accepted_answers` nor `submitted_answer`?";
 
 export const TOPIC_QUESTION =
   "Is `topic` a category with several distinct real examples that players could name one at a time?";

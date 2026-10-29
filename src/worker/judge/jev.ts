@@ -2,6 +2,7 @@ import {
   DUPLICATE_QUESTION,
   MAX_DUPLICATE_CANDIDATES,
   OBSCURITY_QUESTION,
+  REMAINING_QUESTION,
   SHORT_TOPIC_QUESTION,
   SPELLING_QUESTION,
   TOPIC_QUESTION,
@@ -94,6 +95,15 @@ export class JevJudge implements Judge {
       spelled: SPELLING_QUESTION,
       obscurity: OBSCURITY_QUESTION,
     };
+    // Past the duplicate cap the board is far too long for the topic to be running dry.
+    const askRemaining = input.prior.length <= MAX_DUPLICATE_CANDIDATES;
+    if (askRemaining) {
+      // submitted_answer is repeated here: read from the shared state, this question's score swung 0.25–0.74 on identical input.
+      questions.remaining = {
+        type: "noul",
+        instructions: { accepted_answers: prior.map((p) => p.text), submitted_answer: input.answer, question: REMAINING_QUESTION },
+      };
+    }
     // Speculative fan-out: one Noul per prior answer, all in the same request.
     prior.forEach((p, i) => {
       questions[`dup_${i}`] = { type: "noul", instructions: { previous_answer: p.text, question: DUPLICATE_QUESTION } };
@@ -102,12 +112,14 @@ export class JevJudge implements Judge {
       const res = await this.systemOne({ topic: input.topic, submitted_answer: input.answer }, questions, "judge");
       const validity = noul(res.answers, "valid");
       const obscurity = res.answers.obscurity;
+      const remaining = askRemaining ? noul(res.answers, "remaining") : null;
       if (validity === null) return { ok: false, error: "missing validity answer" };
       return {
         ok: true,
         validity,
         spelledCorrectly: noul(res.answers, "spelled") ?? 1,
         obscurity: obscurity?.type === "score" && typeof obscurity.score === "number" ? obscurity.score : 0,
+        exhausted: remaining === null ? 0 : 1 - remaining,
         duplicates: prior.map((p, i) => ({ id: p.id, probability: noul(res.answers, `dup_${i}`) ?? 0 })),
       };
     } catch (err) {

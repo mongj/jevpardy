@@ -1,6 +1,6 @@
 import { JevJudge } from "./jev.ts";
 import { MockJudge } from "./mock.ts";
-import { DEFAULT_ACCEPT_THRESHOLD, DEFAULT_DUPLICATE_THRESHOLD, TYPO_THRESHOLD } from "./questions.ts";
+import { DEFAULT_ACCEPT_THRESHOLD, DEFAULT_DUPLICATE_THRESHOLD, DEFAULT_EXHAUSTED_THRESHOLD, TYPO_THRESHOLD } from "./questions.ts";
 import type { Judge, Thresholds } from "./types.ts";
 
 let warnedMock = false;
@@ -33,6 +33,7 @@ export function thresholdsFromEnv(env: Env): Thresholds {
   return {
     accept: threshold(env.ACCEPT_THRESHOLD, DEFAULT_ACCEPT_THRESHOLD),
     duplicate: threshold(env.DUPLICATE_THRESHOLD, DEFAULT_DUPLICATE_THRESHOLD),
+    exhausted: threshold(env.EXHAUSTED_THRESHOLD, DEFAULT_EXHAUSTED_THRESHOLD),
     typo: TYPO_THRESHOLD,
   };
 }

@@ -68,7 +68,7 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
         )}
         {state.shortList && (
           <p className="short-list small" role="note">
-            📏 SHORT LIST — Jev reckons this topic has under ~20 answers, so you could run out.
+            📏 SHORT LIST — Jev reckons this topic has under ~20 answers. When Jev thinks they've all been named, the game ends: BOARD CLEARED!
           </p>
         )}
         {isHost ? (

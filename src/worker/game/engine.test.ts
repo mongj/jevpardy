@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BONUS_LIFE_POINTS, DEFAULT_SETTINGS, EMPTY_ROOM_MS, OVER_TTL_MS, mergeSettings } from "../../shared/constants.ts";
+import { BONUS_LIFE_POINTS, CLEAR_BONUS_POINTS, DEFAULT_SETTINGS, EMPTY_ROOM_MS, OVER_TTL_MS, mergeSettings } from "../../shared/constants.ts";
 import type { GameSettings } from "../../shared/protocol.ts";
 import { normalizeAnswer, sanitizeAnswer, sanitizeName } from "../../shared/sanitize.ts";
 import type { JudgeOutput } from "../judge/types.ts";
@@ -25,7 +25,7 @@ import {
   toPublic,
 } from "./engine.ts";
 
-const THRESHOLDS = { accept: 0.7, duplicate: 0.75, typo: 0.3 };
+const THRESHOLDS = { accept: 0.7, duplicate: 0.75, exhausted: 0.5, typo: 0.3 };
 
 function makeCtx(): Ctx & { advance: (ms: number) => void } {
   let id = 0;
@@ -40,8 +40,9 @@ function makeCtx(): Ctx & { advance: (ms: number) => void } {
   return ctx;
 }
 
-const ACCEPT: Decision = { accepted: true, reason: null, duplicateOf: null, confidence: 0.95, tier: "basic", typo: false };
-const REJECT: Decision = { accepted: false, reason: "invalid", duplicateOf: null, confidence: 0.1, tier: "basic", typo: false };
+const ACCEPT: Decision = { accepted: true, reason: null, duplicateOf: null, confidence: 0.95, tier: "basic", typo: false, boardCleared: false };
+const CLEARS: Decision = { ...ACCEPT, boardCleared: true };
+const REJECT: Decision = { accepted: false, reason: "invalid", duplicateOf: null, confidence: 0.1, tier: "basic", typo: false, boardCleared: false };
 
 function setup(settings: Partial<GameSettings>, names = ["Ada", "Bo"]) {
   const ctx = makeCtx();
@@ -117,7 +118,32 @@ describe("timed mode", () => {
     expect(state.phase).toBe("over");
     expect(state.winnerId).not.toBe(loser);
     expect(state.players.find((p) => p.id === state.winnerId)!.place).toBe(1);
+    expect(state.endReason).toBe("lastStanding");
     expect(state.awards.some((a) => a.id === "survivor")).toBe(true);
+  });
+
+  it("ends when Jev says the board is cleared", () => {
+    const { state, ctx } = setup({ mode: "timed", lives: 2, turnSeconds: 10 }, ["Ada", "Bo", "Cy"]);
+    start(state, state.hostId!, ctx);
+    const out = current(state);
+    ctx.advance(10_000);
+    tick(state, ctx);
+    ctx.advance(10_000);
+    tick(state, ctx);
+    answer(state, ctx, "Mercury");
+    const closer = current(state);
+    const events = answer(state, ctx, "Venus", CLEARS);
+    expect(events.map((e) => e.type)).toEqual(["judging", "accepted", "gameOver"]);
+    expect(events.at(-1)).toMatchObject({ type: "gameOver", reason: "cleared" });
+    expect(state.phase).toBe("over");
+    expect(state.turn).toBeNull();
+    const alive = state.players.filter((p) => p.status === "alive");
+    expect(alive.length).toBe(3);
+    expect(alive.every((p) => p.points >= CLEAR_BONUS_POINTS)).toBe(true);
+    expect(state.players.find((p) => p.id === out)!.lives).toBe(1);
+    expect(state.awards.find((a) => a.id === "closer")?.playerId).toBe(closer);
+    expect(state.awards.some((a) => a.id === "survivor")).toBe(false);
+    expect(toPublic(state).endReason).toBe("cleared");
   });
 
   it("plays a solo game until the last heart", () => {
@@ -270,12 +296,19 @@ describe("free mode", () => {
 
 describe("decide", () => {
   const answers = [{ id: "a1", text: "München", playerId: "p", tier: "basic" as const, points: 10, typo: false, at: 0, confidence: 1 }];
-  const base: Extract<JudgeOutput, { ok: true }> = { ok: true, validity: 0.9, spelledCorrectly: 0.9, obscurity: 2.4, duplicates: [] };
+  const base: Extract<JudgeOutput, { ok: true }> = { ok: true, validity: 0.9, spelledCorrectly: 0.9, obscurity: 2.4, exhausted: 0.02, duplicates: [] };
 
   it("applies thresholds and tiers", () => {
     expect(decide(base, THRESHOLDS, answers)).toMatchObject({ accepted: true, tier: "rare", typo: false });
     expect(decide({ ...base, validity: 0.5 }, THRESHOLDS, answers)).toMatchObject({ accepted: false, reason: "invalid" });
     expect(decide({ ...base, spelledCorrectly: 0.1 }, THRESHOLDS, answers)).toMatchObject({ typo: true });
+  });
+
+  it("only clears the board with an accepted answer", () => {
+    expect(decide(base, THRESHOLDS, answers).boardCleared).toBe(false);
+    expect(decide({ ...base, exhausted: 0.6 }, THRESHOLDS, answers).boardCleared).toBe(true);
+    expect(decide({ ...base, exhausted: 0.6, validity: 0.2 }, THRESHOLDS, answers).boardCleared).toBe(false);
+    expect(decide({ ...base, exhausted: 0.6, duplicates: [{ id: "a1", probability: 0.97 }] }, THRESHOLDS, answers).boardCleared).toBe(false);
   });
 
   it("prefers duplicate over validity", () => {

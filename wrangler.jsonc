@@ -18,6 +18,8 @@
     "JEV_MODEL": "jev-latest",
     "ACCEPT_THRESHOLD": "0.7",
     "DUPLICATE_THRESHOLD": "0.75",
+    // P(nothing left to name) at which an accepted answer clears the board and ends the game.
+    "EXHAUSTED_THRESHOLD": "0.5",
     "MAX_PLAYERS": "12"
   },
   "observability": {

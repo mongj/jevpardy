@@ -220,8 +220,9 @@ export class GameRoom extends DurableObject<Env> {
       reason: decision.reason,
       confidence: Number(decision.confidence.toFixed(3)),
       tier: decision.tier,
+      boardCleared: decision.boardCleared,
       judge: this.judge.kind,
-      ...(output.ok ? {} : { error: output.error }),
+      ...(output.ok ? { exhausted: Number(output.exhausted.toFixed(3)) } : { error: output.error }),
     });
     await this.commit(resolve(current, result.turnId, decision, this.ctxNow()));
   }

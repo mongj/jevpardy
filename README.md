@@ -26,8 +26,10 @@ The whole thing is one Cloudflare Worker: static assets, an HTTP API, and one Du
 | Timeout | −1 ♥, turn passes | n/a |
 | Wrong / repeated answer | Default: no penalty, keep trying while the clock runs. *Sudden death* option: −1 ♥ and the turn passes | No penalty, keep trying |
 | Out | 0 ♥ = K.O. You keep spectating | You *tap out* for good |
-| Game ends | When only one player is left standing (**last one floating wins**). A solo game runs until your last heart. The host can end it any time | When everyone has tapped out, or the host ends it |
+| Game ends | When only one player is left standing (**last one floating wins**). A solo game runs until your last heart | When everyone has tapped out |
 | Late joiners | Spectate until the next game | Jump straight into the rotation |
+
+In both modes the host can end the game at any time. Jev can also end it by declaring the **board cleared**: an accepted answer was the last thing left to name (see below).
 
 **Timed-mode options:** *Mystery fuse* hides the clock and pops at a random moment between 40% and 160% of the turn length (Puffer Party style). *Speed up* takes 1 s off the turn every lap, down to 6 s.
 
@@ -52,9 +54,10 @@ In timed mode, points also fill a **1UP meter**: every 200 points earns +1 ♥, 
 - **Last one floating wins.** In a multiplayer timed game, the game ends when one player remains, and they win. The brief said "ends when all players have died", but making the survivor play on alone is dull, so I took the Puffer Party rule. A solo game plays until the last heart.
 - **The host is the referee.** The host can **overrule** Jev's latest rejection (the answer is credited and any heart it cost is refunded), **skip** a stuck turn, **kick** a player, **end** the game, or start a **rematch** with a new topic. Exact repeats can't be overruled.
 - **Free mode skips absent players.** A disconnected current player is skipped after 20 s. Timed mode keeps them in the rotation, so their clock runs out like anyone else's.
+- **Board cleared.** Small topics run dry ("planets", "Beatles members"). Without a check, a timed game would turn into players timing out one by one, and a free game would stall. So every judgment also asks Jev whether anything is left to name. When an accepted answer clears the board, the game ends at once. Everyone still in gets +50 points, and whoever named the last answer gets the FINAL ANSWER award. The lobby warns when a topic looks like a *short list*.
 - **Host handover.** If the host is disconnected for 20 s, the crown passes to the next connected player.
 - **Ranking.** Timed: survivors first, then by how late you were knocked out, then points. Free: points, then number of answers.
-- **Awards on the end screen:** Last One Floating, High Score, Deep Diver (rarest answer), Speed Demon (fastest accepted answer), Typo Tyrant, and Jev's Nemesis (most rejections).
+- **Awards on the end screen:** Last One Floating, Final Answer (cleared the board), High Score, Deep Diver (rarest answer), Speed Demon (fastest accepted answer), Typo Tyrant, and Jev's Nemesis (most rejections).
 
 ---
 
@@ -75,7 +78,9 @@ Each submission triggers **one** request to `POST https://api.typesafe.ai/v1/sys
     "spelled":   { "type": "noul",  "instructions": "Is `submitted_answer` spelled correctly, ignoring capitalization and accents?" },
     "obscurity": { "type": "score", "instructions": "How obscure is `submitted_answer` as an example of `topic`?", "criteria": ["One of the first examples almost anyone would name", "...", "An extremely obscure example almost nobody would think of"] },
     // one per previously accepted answer:
-    "dup_0": { "type": "noul", "instructions": { "previous_answer": "Munich", "question": "Do `submitted_answer` and `previous_answer` refer to the same thing, allowing for misspellings, translations, abbreviations, or alternative names?" } }
+    "dup_0": { "type": "noul", "instructions": { "previous_answer": "Munich", "question": "Do `submitted_answer` and `previous_answer` refer to the same thing, allowing for misspellings, translations, abbreviations, or alternative names?" } },
+    // is anything left to name once this answer is counted?
+    "remaining": { "type": "noul", "instructions": { "accepted_answers": ["Munich", "..."], "submitted_answer": "Muenchen", "question": "Is there still at least one real example of `topic` that appears in neither `accepted_answers` nor `submitted_answer`?" } }
   }
 }
 ```
@@ -85,12 +90,22 @@ The response is `{ model, answers: { valid: { type: "noul", noul: 0.92 }, obscur
 1. A cheap **exact repeat** check runs first, without calling Jev. It compares case-, accent- and punctuation-insensitive keys and ignores leading articles.
 2. If any `dup_i ≥ DUPLICATE_THRESHOLD` (0.75), the answer is a **repeat** of that answer.
 3. Otherwise, if `valid ≥ ACCEPT_THRESHOLD` (0.7), it's **accepted**. `round(obscurity)` picks the rarity tier, and `spelled < 0.3` adds a "typo forgiven" badge.
-4. If Jev errors after retries (429/5xx with backoff, 8 s timeout), the verdict is a no-penalty *"Jev glitched, try again"*.
+4. If the answer is accepted and `1 − remaining ≥ EXHAUSTED_THRESHOLD` (0.5), the **board is cleared** and the game ends.
+5. If Jev errors after retries (429/5xx with backoff, 8 s timeout), the verdict is a no-penalty *"Jev glitched, try again"*.
 
 When the room is created (and whenever the host changes the topic), one more request asks two Nouls about the topic:
 
 - **Listable:** "is `topic` a category with several distinct real examples?" Below 0.5, the host is warned and can *play anyway*.
 - **Short list:** "does `topic` have fewer than about 20 distinct real examples?" At 0.5 or above, the lobby shows a *SHORT LIST* notice so players know the answers could run out. Measured: planets 0.92, days of the week 0.93, Beatles members 0.89, Harry Potter books 0.85; US states 0.08, dog breeds 0.04, cities in continental Europe 0.03.
+
+About the board-cleared check:
+
+- **Why it asks "is anything left?"** Jev separated finished from unfinished lists more sharply when asked that and the answer inverted, than when asked "is the list complete?".
+- **Measured:** across five short topics (planets, days of the week, continents, Beatles members, primary colours), finished lists scored 0.53–0.92. Lists missing one item scored 0.04–0.46. The threshold sits high because ending a game early is worse than missing the end; a miss just leaves the game running.
+- **Big topics stay low:** in a full game on cities in continental Europe, the highest score was 0.11.
+- **Why `submitted_answer` is repeated inside the question:** when Jev read it only from the shared `state`, identical requests scored anywhere from 0.25 to 0.74.
+- **Real-Jev runs:** three bot games on "planets in the solar system" each ended on the eighth planet (0.59–0.67). With seven planets named, the score never went above 0.08.
+- **Overrules don't check:** an answer the host overrules is credited without a Jev call, so it can't clear the board.
 
 All questions and thresholds live in [`src/worker/judge/questions.ts`](src/worker/judge/questions.ts), so they're easy to review and tune.
 
@@ -104,7 +119,7 @@ With no `TYPESAFE_API_KEY` (or `JUDGE_MODE=mock`), the game uses an offline mock
 - flags near-identical spellings (≥ 80% Levenshtein similarity) as repeats;
 - ranks longer answers as rarer;
 - treats an answer containing `~` as a forgiven typo.
-- treats a topic ending in `(N)`, such as `planets (8)`, as having exactly N answers. That's a short list when N < 20.
+- treats a topic ending in `(N)`, such as `planets (8)`, as having exactly N answers. That's a short list when N < 20, and the board is cleared once N answers are accepted.
 
 ---
 
@@ -147,7 +162,7 @@ src/
     lib/           useRoom (WebSocket + reconnect) · identity · router · sfx (WebAudio chiptune) · clock
     components/    Pixel (sprites, Jev, hearts) · Starfield · Countdown/Fuse · AnswerWall · PlayerRail · FxLayer · QRCode · ui
     screens/       Home · Host · JoinGate · Lobby · Game · GameOver · Room · HowToPlay · SettingsForm
-scripts/simulate.ts  bots that play full games over WebSocket in both modes
+scripts/simulate.ts  bots that play full games over WebSocket (timed, free, board cleared)
 wrangler.jsonc       Worker + assets + Durable Object + vars
 ```
 
@@ -175,7 +190,7 @@ Open the URL on your laptop, and on your phone via `yarn dev --host` and your LA
 yarn typecheck    # tsc --noEmit for client, worker and node configs
 yarn test         # vitest: game engine state machine
 yarn build        # production build into dist/
-yarn simulate --url http://localhost:5173 --mode both   # bots play a timed and a free game, with assertions
+yarn simulate --url http://localhost:5173   # bots play a timed, a free and a board-cleared game, with assertions (--mode timed|free|cleared|all)
 ```
 
 ## Self-host on Cloudflare
@@ -201,12 +216,13 @@ That's it: one Worker at `https://jevpardy.<your-subdomain>.workers.dev`. To use
 | `JEV_MODEL` | vars | `jev-latest` | Model or alias. Pin e.g. `jev-1.14.0` if you tune thresholds |
 | `ACCEPT_THRESHOLD` | vars | `0.7` | Minimum Noul probability for "valid example of the topic" |
 | `DUPLICATE_THRESHOLD` | vars | `0.75` | Minimum Noul probability for "same thing as a previous answer" |
+| `EXHAUSTED_THRESHOLD` | vars | `0.5` | Minimum P(nothing left to name) at which an accepted answer clears the board and ends the game |
 | `MAX_PLAYERS` | vars | `12` | Seats per room (spectators are separate, max 40) |
 
 ### Cost notes
 
 - **Cloudflare.** Lobby and menu traffic is static assets, which are free. A room is one Durable Object. With the Hibernation API, idle sockets don't accrue duration charges; the object only runs while handling a message or alarm. Each answer costs a handful of WebSocket messages plus one storage write. A typical party game should fit comfortably inside the Workers Free plan's daily Durable Object allowance. Check [current Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) for exact limits.
-- **Jev.** Jev bills input tokens only: [$0.042 per million](https://docs.typesafe.ai/models.md) on Jev 1.14. A judgment costs about 900 tokens plus about 40 per previous answer (the duplicate check grows with the board). A long 200-answer game is about 1M tokens in total, roughly **$0.04**. Topic checks are a few hundred tokens each.
+- **Jev.** Jev bills input tokens only: [$0.042 per million](https://docs.typesafe.ai/models.md) on Jev 1.14. A judgment costs about 900 tokens plus about 45 per previous answer (the duplicate check grows with the board). A long 200-answer game is about 1M tokens in total, roughly **$0.04**. Topic checks are a few hundred tokens each.
 - **Abuse limits.** Rate limits, per-room caps and auto-wiping rooms bound the cost of a single room. There's no global rate limit on room creation. If you expose an instance publicly, consider adding a Workers rate-limiting binding or Turnstile on `POST /api/rooms`.
 
 ---

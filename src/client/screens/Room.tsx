@@ -155,6 +155,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
             break;
           case "gameOver": {
             const won = e.winnerId === meId;
+            if (e.reason === "cleared") f?.burst({ text: "BOARD CLEARED!", sub: "nothing left to name", color: "var(--green)", kind: "big" });
             setTimeout(() => {
               sfx.gameOver(won);
               fx.current?.confetti(["#ffd23f", "#3ef0ff", "#ff4fd8", "#7dff6b"], 90);

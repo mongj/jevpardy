@@ -20,6 +20,8 @@ export type JudgeOutput =
       spelledCorrectly: number;
       /** Expected obscurity level, 0 (most common) .. TIERS.length-1. */
       obscurity: number;
+      /** P(nothing valid is left to name once this answer is counted). */
+      exhausted: number;
       /** P(answer names the same thing as each prior answer). */
       duplicates: { id: string; probability: number }[];
     }
@@ -43,6 +45,8 @@ export interface Judge {
 export interface Thresholds {
   accept: number;
   duplicate: number;
+  /** At or above this P(exhausted) an accepted answer clears the board and ends the game. */
+  exhausted: number;
   /** Below this P(spelled correctly) an accepted answer is flagged as a forgiven typo. */
   typo: number;
 }

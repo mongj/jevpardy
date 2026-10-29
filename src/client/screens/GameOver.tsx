@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { MAX_TOPIC_LENGTH, tierById } from "../../shared/constants.ts";
-import type { ClientMessage, PublicPlayer, PublicState } from "../../shared/protocol.ts";
+import { CLEAR_BONUS_POINTS, MAX_TOPIC_LENGTH, tierById } from "../../shared/constants.ts";
+import type { ClientMessage, EndReason, PublicPlayer, PublicState } from "../../shared/protocol.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
 import { Crown, JevBot, Sprite } from "../components/Pixel.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
@@ -12,6 +12,23 @@ function survival(p: PublicPlayer, state: PublicState): string {
   const end = p.outAt ?? state.endedAt ?? state.startedAt;
   const s = Math.max(0, Math.round((end - Math.max(state.startedAt, p.joinedAt)) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function endLine(reason: EndReason | null, winner: PublicPlayer): string {
+  switch (reason) {
+    case "lastStanding":
+      return "Last one floating";
+    case "cleared":
+      return "Board cleared";
+    case "allOut":
+    case "host":
+    case null:
+      return `${winner.points} points`;
+    default: {
+      const unknown: never = reason;
+      return String(unknown);
+    }
+  }
 }
 
 function Selfdestruct({ at, offset }: { at: number; offset: number }) {
@@ -33,7 +50,14 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
 
   return (
     <div className="game-over">
-      <h1 className="game-over-title">GAME OVER</h1>
+      {state.endReason === "cleared" ? (
+        <>
+          <h1 className="game-over-title cleared">BOARD CLEARED!</h1>
+          <p className="cleared-note small muted">Jev reckons there's nothing left to name. Everyone still in got +{CLEAR_BONUS_POINTS}.</p>
+        </>
+      ) : (
+        <h1 className="game-over-title">GAME OVER</h1>
+      )}
       <div className="podium">
         {winner ? (
           <>
@@ -45,7 +69,7 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
               {winner.id === meId ? "YOU WIN!" : `${winner.name} WINS!`}
             </p>
             <p className="small muted">
-              {timed && state.players.filter((p) => p.role === "player").length > 1 ? "Last one floating" : `${winner.points} points`} · {state.answers.length} answers found
+              {endLine(state.endReason, winner)} · {state.answers.length} answers found
             </p>
           </>
         ) : (

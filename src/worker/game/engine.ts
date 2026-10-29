@@ -1,6 +1,7 @@
 import {
   AVATAR_COUNT,
   BONUS_LIFE_POINTS,
+  CLEAR_BONUS_POINTS,
   DEFAULT_SETTINGS,
   EMPTY_ROOM_MS,
   FREE_DISCONNECT_GRACE_MS,
@@ -25,6 +26,7 @@ import {
 import type {
   AcceptedAnswer,
   Award,
+  EndReason,
   ErrorCode,
   GameEvent,
   GameSettings,
@@ -115,6 +117,7 @@ export interface RoomState {
   startedAt: number | null;
   endedAt: number | null;
   winnerId: string | null;
+  endReason: EndReason | null;
   awards: Award[];
   lastActivityAt: number;
   emptySince: number | null;
@@ -182,6 +185,7 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     startedAt: null,
     endedAt: null,
     winnerId: null,
+    endReason: null,
     awards: [],
     lastActivityAt: ctx.now,
     emptySince: ctx.now,
@@ -462,7 +466,7 @@ function advanceTurn(state: RoomState, fromId: string, ctx: Ctx): GameEvent[] {
   const over = checkGameOver(state, ctx);
   if (over.length > 0) return over;
   const next = nextPlayerId(state, fromId);
-  if (!next) return finish(state, ctx);
+  if (!next) return finish(state, ctx, "allOut");
   const events: GameEvent[] = [];
   if (next.wrapped) {
     state.lap += 1;
@@ -484,16 +488,21 @@ function checkGameOver(state: RoomState, ctx: Ctx): GameEvent[] {
   const timed = state.settings.mode === "timed";
   // Last one floating wins in a multiplayer timed game; solo games play to the last heart.
   const lastStanding = timed && state.startingPlayers > 1 && alive.length === 1 && contestants(state).length > 1;
-  if (alive.length === 0 || lastStanding) return finish(state, ctx);
+  if (alive.length === 0) return finish(state, ctx, "allOut");
+  if (lastStanding) return finish(state, ctx, "lastStanding");
   return [];
 }
 
-export function finish(state: RoomState, ctx: Pick<Ctx, "now">): GameEvent[] {
+export function finish(state: RoomState, ctx: Pick<Ctx, "now">, reason: EndReason): GameEvent[] {
   if (state.phase !== "playing") return [];
   state.phase = "over";
   state.endedAt = ctx.now;
+  state.endReason = reason;
   state.turn = null;
   const roster = contestants(state);
+  if (reason === "cleared") {
+    for (const p of roster) if (p.status === "alive") p.points += CLEAR_BONUS_POINTS;
+  }
   const timed = state.settings.mode === "timed";
   const ranked = [...roster].sort((a, b) => {
     if (timed) {
@@ -510,7 +519,7 @@ export function finish(state: RoomState, ctx: Pick<Ctx, "now">): GameEvent[] {
   const top = ranked[0];
   state.winnerId = top && (top.points > 0 || timed) ? top.id : null;
   state.awards = computeAwards(state);
-  return [{ type: "gameOver", winnerId: state.winnerId }];
+  return [{ type: "gameOver", winnerId: state.winnerId, reason }];
 }
 
 function computeAwards(state: RoomState): Award[] {
@@ -530,9 +539,13 @@ function computeAwards(state: RoomState): Award[] {
     return winner && value !== null ? { winner, value } : null;
   };
 
-  if (state.settings.mode === "timed" && state.startingPlayers > 1) {
+  if (state.endReason === "lastStanding") {
     const survivor = roster.find((p) => p.status === "alive");
     if (survivor) awards.push({ id: "survivor", title: "LAST ONE FLOATING", blurb: "Outlasted everyone.", playerId: survivor.id });
+  }
+  const closer = state.answers[state.answers.length - 1];
+  if (state.endReason === "cleared" && closer) {
+    awards.push({ id: "closer", title: "FINAL ANSWER", blurb: `"${closer.text}" cleared the board`, playerId: closer.playerId });
   }
   const high = best(
     (p) => (p.points > 0 ? p.points : null),
@@ -627,11 +640,13 @@ export interface Decision {
   confidence: number;
   tier: TierId;
   typo: boolean;
+  /** Accepted, and Jev thinks nothing valid is left to name. */
+  boardCleared: boolean;
 }
 
 export function decide(output: JudgeOutput, thresholds: Thresholds, answers: AcceptedAnswer[]): Decision {
   if (!output.ok) {
-    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", typo: false };
+    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", typo: false, boardCleared: false };
   }
   const tierLevel = Math.min(TIERS.length - 1, Math.max(0, Math.round(output.obscurity)));
   const tier = TIERS[tierLevel]!.id;
@@ -641,7 +656,7 @@ export function decide(output: JudgeOutput, thresholds: Thresholds, answers: Acc
   }
   if (dup) {
     const original = answers.find((a) => a.id === dup.id);
-    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier, typo: false };
+    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier, typo: false, boardCleared: false };
   }
   const accepted = output.validity >= thresholds.accept;
   return {
@@ -651,6 +666,7 @@ export function decide(output: JudgeOutput, thresholds: Thresholds, answers: Acc
     confidence: output.validity,
     tier,
     typo: accepted && output.spelledCorrectly < thresholds.typo,
+    boardCleared: accepted && output.exhausted >= thresholds.exhausted,
   };
 }
 
@@ -690,7 +706,7 @@ function acceptAnswer(
   state: RoomState,
   player: PlayerRecord,
   text: string,
-  decision: Pick<Decision, "tier" | "typo" | "confidence">,
+  decision: Pick<Decision, "tier" | "typo" | "confidence" | "boardCleared">,
   overruled: boolean,
   ctx: Ctx,
 ): GameEvent[] {
@@ -750,7 +766,9 @@ function acceptAnswer(
       }
     }
   }
-  if (isCurrentTurn) {
+  if (decision.boardCleared) {
+    events.push(...finish(state, ctx, "cleared"));
+  } else if (isCurrentTurn) {
     state.turn = null;
     events.push(...advanceTurn(state, player.id, ctx));
   }
@@ -874,7 +892,7 @@ export function overrule(state: RoomState, actorId: string, verdictId: string, c
   }
   state.log.pop();
   touch(state, ctx);
-  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", typo: false, confidence: last.confidence }, true, ctx);
+  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", typo: false, confidence: last.confidence, boardCleared: false }, true, ctx);
   return { ok: true, events };
 }
 
@@ -882,7 +900,7 @@ export function end(state: RoomState, actorId: string, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can end the game.");
   if (state.phase !== "playing") return fail("wrong_phase", "No game in progress.");
   touch(state, ctx);
-  return { ok: true, events: finish(state, ctx) };
+  return { ok: true, events: finish(state, ctx, "host") };
 }
 
 export function rematch(state: RoomState, actorId: string, topic: string | undefined, ctx: Ctx): Result {
@@ -917,6 +935,7 @@ export function rematch(state: RoomState, actorId: string, topic: string | undef
     startedAt: null,
     endedAt: null,
     winnerId: null,
+    endReason: null,
     awards: [],
   } satisfies Partial<RoomState>);
   if (!findPlayer(state, state.hostId)) promoteHost(state);
@@ -939,7 +958,7 @@ export function tick(state: RoomState, ctx: Ctx): GameEvent[] {
 
   if (turn.judging) {
     if (ctx.now - turn.judging.startedAt >= JUDGE_STUCK_MS && player) {
-      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1, typo: 0 }, []), ctx));
+      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1, exhausted: 1, typo: 0 }, []), ctx));
     }
     return events;
   }
@@ -1024,6 +1043,7 @@ export function toPublic(state: RoomState): PublicState {
     startedAt: state.startedAt,
     endedAt: state.endedAt,
     winnerId: state.winnerId,
+    endReason: state.endReason ?? null,
     awards: state.awards,
     judge: state.judge,
     shortList: state.shortList ?? null,

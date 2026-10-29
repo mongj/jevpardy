@@ -18,6 +18,9 @@ export interface GameSettings {
   speedUp: boolean;
 }
 
+/** lastStanding: one timed player left; allOut: everyone eliminated or tapped out; cleared: Jev says nothing is left to name. */
+export type EndReason = "lastStanding" | "allOut" | "host" | "cleared";
+
 export type TierId = "basic" | "solid" | "rare" | "deepcut" | "jevillion";
 
 export type RejectReason = "invalid" | "duplicate" | "judge_error";
@@ -126,6 +129,7 @@ export interface PublicState {
   startedAt: number | null;
   endedAt: number | null;
   winnerId: string | null;
+  endReason: EndReason | null;
   awards: Award[];
   judge: JudgeKind;
   /** Jev thinks the topic has under ~20 answers, so the board may run dry. Null until checked. */
@@ -154,7 +158,7 @@ export type GameEvent =
   | { type: "tappedOut"; playerId: string }
   | { type: "skipped"; playerId: string }
   | { type: "speedUp"; turnSeconds: number }
-  | { type: "gameOver"; winnerId: string | null }
+  | { type: "gameOver"; winnerId: string | null; reason: EndReason }
   | { type: "backToLobby" };
 
 export type Emote = "👏" | "😂" | "🔥" | "😱" | "🤔" | "👀";

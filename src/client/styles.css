@@ -1393,6 +1393,16 @@ input.answer-input:disabled {
     0 0 24px rgba(255, 79, 109, 0.6);
   animation: blink 1.2s steps(1) 3;
 }
+.game-over-title.cleared {
+  color: var(--green);
+  text-shadow:
+    4px 4px 0 #0c3a20,
+    0 0 24px rgba(125, 255, 107, 0.6);
+}
+.cleared-note {
+  text-align: center;
+  margin: -10px 0 0;
+}
 .podium {
   text-align: center;
   display: flex;

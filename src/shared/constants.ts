@@ -13,6 +13,8 @@ export const MAX_SPECTATORS = 40;
 export const MAX_LIVES = 5;
 /** Timed mode: points that fill the 1UP meter for a bonus life. */
 export const BONUS_LIFE_POINTS = 200;
+/** Given to every player still in when Jev declares the board cleared. */
+export const CLEAR_BONUS_POINTS = 50;
 
 export const MIN_SUBMIT_INTERVAL_MS = 600;
 export const MAX_ATTEMPTS_PER_TURN = 30;
