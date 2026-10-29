@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MAX_TOPIC_LENGTH } from "../../shared/constants.ts";
 import type { ClientMessage, PublicState } from "../../shared/protocol.ts";
-import { Crown, JevBot, Sprite } from "../components/Pixel.tsx";
+import { Crown, Icon, JevBot, Sprite } from "../components/Pixel.tsx";
 import { QRCode } from "../components/QRCode.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
 import { ModePicker, TimedSettings, settingsSummary } from "./SettingsForm.tsx";
@@ -114,7 +114,7 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
       <div className="lobby-cta">
         {isHost ? (
           <PixelButton big tone="green" onClick={() => send({ type: "start" })} disabled={online.length === 0}>
-            ▶ START GAME {online.length > 1 ? `(${online.length})` : "(SOLO)"}
+            <Icon name="right" /> START GAME {online.length > 1 ? `(${online.length})` : "(SOLO)"}
           </PixelButton>
         ) : (
           <div className="waiting">

@@ -167,4 +167,23 @@ export function Crown({ size = 14 }: { size?: number }) {
   );
 }
 
+const ICONS = {
+  right: ["X...", "XX..", "XXX.", "XXXX", "XXX.", "XX..", "X..."],
+  left: ["...X", "..XX", ".XXX", "XXXX", ".XXX", "..XX", "...X"],
+  replay: ["..XXX.X", ".X...XX", "X...XXX", "X......", "X.....X", ".X...X.", "..XXX.."],
+} as const;
+
+/** Pixel glyphs for button labels; the display font has no arrows, and fallback-font glyphs sit off-centre. */
+export function Icon({ name }: { name: keyof typeof ICONS }) {
+  const rows = ICONS[name];
+  const w = rows[0].length;
+  return (
+    <svg className="px-icon" width={`${w / 8}em`} height="0.875em" viewBox={`0 0 ${w} 7`} shapeRendering="crispEdges" aria-hidden="true">
+      {pixels(rows, { X: "currentColor" }).map((p) => (
+        <rect key={`${p.x}-${p.y}`} x={p.x} y={p.y} width={1.02} height={1.02} fill={p.fill} />
+      ))}
+    </svg>
+  );
+}
+
 export const AVATAR_TOTAL = SPRITES.length;

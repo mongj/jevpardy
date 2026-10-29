@@ -254,6 +254,16 @@ b {
   filter: grayscale(0.85) brightness(0.55);
   cursor: not-allowed;
 }
+.px-btn,
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+}
+.px-icon {
+  flex: none;
+}
 .px-btn.big {
   font-size: 15px;
   padding: 18px 20px;

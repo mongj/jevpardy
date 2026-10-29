@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DEFAULT_SETTINGS, MAX_NAME_LENGTH, MAX_TOPIC_LENGTH, mergeSettings } from "../../shared/constants.ts";
 import type { CreateRoomRequest, CreateRoomResponse, GameSettings } from "../../shared/protocol.ts";
 import { sanitizeName, sanitizeTopic } from "../../shared/sanitize.ts";
-import { JevBot } from "../components/Pixel.tsx";
+import { Icon, JevBot } from "../components/Pixel.tsx";
 import { Modal, Panel, PixelButton } from "../components/ui.tsx";
 import { getSavedName, getToken, saveName } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
@@ -71,7 +71,7 @@ export function Host() {
     <main className="screen host">
       <header className="topbar">
         <button type="button" className="link-btn" onClick={() => navigate("/")}>
-          ◀ BACK
+          <Icon name="left" /> BACK
         </button>
         <h1 className="screen-title">NEW GAME</h1>
         <span />
@@ -119,7 +119,7 @@ export function Host() {
 
         {error && <p className="error-text">{error}</p>}
         <PixelButton big tone="green" type="submit" disabled={!cleanName || !cleanTopic || busy}>
-          {busy ? "ASKING JEV…" : "▶ CREATE ROOM"}
+          {busy ? "ASKING JEV…" : <><Icon name="right" /> CREATE ROOM</>}
         </PixelButton>
       </form>
 

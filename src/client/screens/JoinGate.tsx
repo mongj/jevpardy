@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MAX_NAME_LENGTH } from "../../shared/constants.ts";
 import type { RoomInfoResponse } from "../../shared/protocol.ts";
 import { sanitizeName } from "../../shared/sanitize.ts";
-import { JevBot } from "../components/Pixel.tsx";
+import { Icon, JevBot } from "../components/Pixel.tsx";
 import { Panel, PixelButton } from "../components/ui.tsx";
 import { getSavedName } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
@@ -25,7 +25,7 @@ export function JoinGate({ code, onJoin }: { code: string; onJoin: (name: string
     <main className="screen join">
       <header className="topbar">
         <button type="button" className="link-btn" onClick={() => navigate("/")}>
-          ◀ BACK
+          <Icon name="left" /> BACK
         </button>
         <h1 className="screen-title">ROOM {code}</h1>
         <span />
@@ -58,7 +58,7 @@ export function JoinGate({ code, onJoin }: { code: string; onJoin: (name: string
         </label>
         <input id="name" className="name-input" value={name} onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LENGTH))} placeholder="PLAYER 2" autoFocus autoComplete="nickname" maxLength={MAX_NAME_LENGTH} />
         <PixelButton big tone="green" type="submit" disabled={!clean || !info?.ok}>
-          ▶ JOIN
+          <Icon name="right" /> JOIN
         </PixelButton>
       </form>
     </main>
@@ -78,7 +78,7 @@ export function NoRoom({ code, reason = "not_found" }: { code: string; reason?: 
       <h1 className="screen-title glow-pink">{text[0]}</h1>
       <p className="muted">{text[1]}</p>
       <PixelButton tone="yellow" onClick={() => navigate("/")}>
-        ◀ HOME
+        <Icon name="left" /> HOME
       </PixelButton>
     </main>
   );

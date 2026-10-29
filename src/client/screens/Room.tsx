@@ -3,7 +3,7 @@ import { tierById, tierIndex } from "../../shared/constants.ts";
 import type { Emote, GameEvent, PublicState } from "../../shared/protocol.ts";
 import { sanitizeName } from "../../shared/sanitize.ts";
 import { FxLayer, type FxHandle } from "../components/FxLayer.tsx";
-import { JevBot, type JevMood } from "../components/Pixel.tsx";
+import { Icon, JevBot, type JevMood } from "../components/Pixel.tsx";
 import { MuteButton } from "../components/ui.tsx";
 import { getSavedName, saveName } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
@@ -192,7 +192,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
     <main className={`screen room phase-${state?.phase ?? "loading"}`}>
       <header className="topbar">
         <button type="button" className="link-btn" onClick={() => navigate("/")}>
-          ◀ EXIT
+          <Icon name="left" /> EXIT
         </button>
         <span className="code-badge" title="Room code">
           {code}

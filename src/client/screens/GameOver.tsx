@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CLEAR_BONUS_POINTS, MAX_TOPIC_LENGTH, tierById } from "../../shared/constants.ts";
 import type { ClientMessage, EndReason, PublicPlayer, PublicState } from "../../shared/protocol.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
-import { Crown, JevBot, Sprite } from "../components/Pixel.tsx";
+import { Crown, Icon, JevBot, Sprite } from "../components/Pixel.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
 import { useTicker } from "../lib/clock.ts";
 import { navigate } from "../lib/router.ts";
@@ -144,14 +144,14 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
             </label>
             <input id="rematch-topic" className="name-input" value={topic} maxLength={MAX_TOPIC_LENGTH} onChange={(e) => setTopic(e.target.value)} />
             <PixelButton big tone="green" type="submit">
-              ↺ PLAY AGAIN
+              <Icon name="replay" /> PLAY AGAIN
             </PixelButton>
           </form>
         ) : (
           <Blink>WAITING FOR HOST…</Blink>
         )}
         <PixelButton tone="ghost" onClick={() => navigate("/")}>
-          ◀ LEAVE
+          <Icon name="left" /> LEAVE
         </PixelButton>
         <p className="small muted">
           This room self-destructs in <Selfdestruct at={state.expiresAt} offset={offset} />
