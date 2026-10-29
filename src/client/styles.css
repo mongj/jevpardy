@@ -191,10 +191,7 @@ b {
   padding: 16px;
   margin: var(--px);
   box-shadow:
-    0 calc(-1 * var(--px)) 0 0 var(--accent),
-    0 var(--px) 0 0 var(--accent),
-    calc(-1 * var(--px)) 0 0 0 var(--accent),
-    var(--px) 0 0 0 var(--accent),
+    0 0 0 var(--px) var(--accent),
     0 0 0 calc(var(--px) * 2) rgba(0, 0, 0, 0.6),
     0 0 24px 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
@@ -234,10 +231,7 @@ b {
   position: relative;
   text-transform: uppercase;
   box-shadow:
-    0 calc(-1 * var(--px)) 0 0 #05040f,
-    0 var(--px) 0 0 #05040f,
-    calc(-1 * var(--px)) 0 0 0 #05040f,
-    var(--px) 0 0 0 #05040f,
+    0 0 0 var(--px) #05040f,
     inset 0 calc(-1 * var(--px)) 0 0 var(--shade),
     inset var(--px) var(--px) 0 0 color-mix(in srgb, var(--c) 60%, white);
   transition: transform 60ms steps(2);
@@ -249,10 +243,7 @@ b {
 .px-btn:active:not(:disabled) {
   transform: translateY(var(--px));
   box-shadow:
-    0 calc(-1 * var(--px)) 0 0 #05040f,
-    0 var(--px) 0 0 #05040f,
-    calc(-1 * var(--px)) 0 0 0 #05040f,
-    var(--px) 0 0 0 #05040f,
+    0 0 0 var(--px) #05040f,
     inset 0 var(--px) 0 0 var(--shade);
 }
 .px-btn:disabled {
