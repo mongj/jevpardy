@@ -106,15 +106,12 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
                 </p>
               </div>
             </div>
-            {timed ? (
-              state.settings.mysteryFuse ? (
+            {timed &&
+              (state.settings.mysteryFuse ? (
                 <Fuse turn={turn} offset={offset} averageMs={state.settings.turnSeconds * 1000} />
               ) : (
                 <Countdown turn={turn} offset={offset} audible={myTurn} />
-              )
-            ) : (
-              <p className="no-clock small">☕ NO CLOCK — TAKE YOUR TIME</p>
-            )}
+              ))}
             <div className="jev-row">
               <JevBot mood={turn.judging ? "thinking" : mood} size={52} />
               <div className={`bubble ${turn.judging ? "judging" : ""}`}>

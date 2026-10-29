@@ -983,12 +983,6 @@ input.code-input {
 .spark {
   animation: blink 0.15s steps(1) infinite;
 }
-.no-clock {
-  text-align: center;
-  color: var(--cyan);
-  margin: 0;
-}
-
 .jev-row {
   display: flex;
   align-items: center;
