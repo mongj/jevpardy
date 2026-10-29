@@ -1,13 +1,13 @@
 // Drives full games against a running server with bot players over WebSocket.
-//   node scripts/simulate.ts [--url http://localhost:5173] [--mode timed|free|both] [--topic "..."]
+//   node scripts/simulate.ts [--url http://localhost:5173] [--mode timed|free|cleared|all] [--topic "..."]
 
 import { parseArgs } from "node:util";
-import type { ClientMessage, CreateRoomResponse, GameEvent, PublicState, ServerMessage } from "../src/shared/protocol.ts";
+import type { ClientMessage, CreateRoomResponse, GameEvent, HealthResponse, PublicState, ServerMessage } from "../src/shared/protocol.ts";
 
 const { values } = parseArgs({
   options: {
     url: { type: "string", default: "http://localhost:5173" },
-    mode: { type: "string", default: "both" },
+    mode: { type: "string", default: "all" },
     topic: { type: "string", default: "cities in continental Europe" },
     quiet: { type: "boolean", default: false },
   },
@@ -160,7 +160,7 @@ function describe(e: GameEvent, s: PublicState): string | null {
     case "speedUp":
       return `    ⚡ speed up: ${e.turnSeconds}s`;
     case "gameOver":
-      return `■ GAME OVER — winner: ${e.winnerId ? name(e.winnerId) : "nobody"}`;
+      return `■ GAME OVER (${e.reason}) — winner: ${e.winnerId ? name(e.winnerId) : "nobody"}`;
     case "backToLobby":
       return "↺ back to lobby";
     default: {
@@ -170,11 +170,11 @@ function describe(e: GameEvent, s: PublicState): string | null {
   }
 }
 
-async function createRoom(settings: Record<string, unknown>, hostToken: string): Promise<string> {
+async function createRoom(settings: Record<string, unknown>, hostToken: string, topic = values.topic!): Promise<string> {
   const res = await fetch(`${BASE}/api/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic: values.topic, settings, token: hostToken, force: true }),
+    body: JSON.stringify({ topic, settings, token: hostToken, force: true }),
   });
   const body = (await res.json()) as CreateRoomResponse;
   if (!body.ok) throw new Error(`create failed: ${body.message}`);
@@ -243,7 +243,7 @@ async function runTimed(): Promise<string[]> {
   }
   const events = bots[0]!.events;
   const sleepy = final.players.find((p) => p.name === "SleepyBot")!;
-  check("game ended", final.phase === "over", failures);
+  check("game ended with the last one floating", final.phase === "over" && final.endReason === "lastStanding", failures);
   check("sleepy bot timed out and was eliminated", sleepy.status === "eliminated" && sleepy.stats.timeouts === 2, failures);
   check("an exact duplicate was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "duplicate"), failures);
   check("a wrong answer was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "invalid"), failures);
@@ -299,6 +299,37 @@ async function runFree(): Promise<string[]> {
   return failures;
 }
 
+const PLANETS = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+
+async function runCleared(): Promise<string[]> {
+  // Against the real Jev the topic is a genuine short list; the mock judge reads the size from "(8)".
+  const topic = health.judge === "mock" ? "planets in the solar system (8)" : "planets in the solar system";
+  console.log(`\n\x1b[1m=== BOARD CLEARED (2 bots, timed, "${topic}") ===\x1b[0m`);
+  const host = new Bot("", { name: "Astro", strategy: "ace", pool: PLANETS.filter((_, i) => i % 2 === 0) });
+  const code = await createRoom({ mode: "timed", lives: 3, turnSeconds: 15 }, host.token, topic);
+  console.log(`room ${code} — ${BASE}/r/${code}`);
+  host.code = code;
+  const guest = new Bot(code, { name: "Nova", strategy: "ace", pool: PLANETS.filter((_, i) => i % 2 === 1) });
+  await host.connect();
+  await guest.connect();
+  attachLogger(host);
+  const failures: string[] = [];
+  check("lobby flags the topic as a short list", host.state!.shortList === true, failures);
+  host.send({ type: "start" });
+  const final = await Promise.race([host.done, wait(90_000).then(() => null)]);
+  if (!final) {
+    failures.push("cleared game did not finish within 90s");
+    return failures;
+  }
+  check("game ended because the board was cleared", final.endReason === "cleared", failures);
+  check("all eight planets were named", final.answers.length === PLANETS.length, failures);
+  check("nobody was knocked out", final.players.every((p) => p.status === "alive"), failures);
+  check("the closer got the FINAL ANSWER award", final.awards.find((a) => a.id === "closer")?.playerId === final.answers.at(-1)?.playerId, failures);
+  printSummary(final);
+  for (const b of [host, guest]) b.ws.close();
+  return failures;
+}
+
 function printSummary(s: PublicState): void {
   console.log("\n  STANDINGS");
   for (const p of [...s.players].filter((x) => x.role === "player").sort((a, b) => (a.place ?? 99) - (b.place ?? 99))) {
@@ -308,11 +339,12 @@ function printSummary(s: PublicState): void {
   console.log(`  ANSWERS: ${s.answers.map((a) => a.text).join(", ")}\n`);
 }
 
-const health = await fetch(`${BASE}/api/health`).then((r) => r.json());
+const health = (await fetch(`${BASE}/api/health`).then((r) => r.json())) as HealthResponse;
 console.log(`server ${BASE} judge=${JSON.stringify(health)}`);
 const failures: string[] = [];
-if (values.mode === "timed" || values.mode === "both") failures.push(...(await runTimed()));
-if (values.mode === "free" || values.mode === "both") failures.push(...(await runFree()));
+if (values.mode === "timed" || values.mode === "all") failures.push(...(await runTimed()));
+if (values.mode === "free" || values.mode === "all") failures.push(...(await runFree()));
+if (values.mode === "cleared" || values.mode === "all") failures.push(...(await runCleared()));
 if (failures.length > 0) {
   console.log(`\x1b[31m${failures.length} check(s) failed:\n - ${failures.join("\n - ")}${reset}`);
   process.exit(1);
