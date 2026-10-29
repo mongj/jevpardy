@@ -7,7 +7,4 @@ export default defineConfig({
   environments: {
     worker: { build: { sourcemap: true } },
   },
-  test: {
-    include: ["src/**/*.test.ts"],
-  },
 });
