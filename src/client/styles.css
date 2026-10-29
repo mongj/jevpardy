@@ -34,11 +34,15 @@ body {
   line-height: 1.25;
   -webkit-font-smoothing: none;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
 }
 
-body {
+/* Only html may hide overflow: if body does too, it becomes its own (empty) scroll container and swallows touch scrolling. */
+html {
+  overflow-x: hidden;
   overscroll-behavior-y: none;
+}
+body {
+  overflow-x: clip;
 }
 
 #root {
