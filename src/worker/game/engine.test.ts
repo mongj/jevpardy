@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BONUS_LIFE_POINTS, mergeSettings, DEFAULT_SETTINGS } from "../../shared/constants.ts";
+import { BONUS_LIFE_POINTS, DEFAULT_SETTINGS, EMPTY_ROOM_MS, OVER_TTL_MS, mergeSettings } from "../../shared/constants.ts";
 import type { GameSettings } from "../../shared/protocol.ts";
 import { normalizeAnswer, sanitizeAnswer, sanitizeName } from "../../shared/sanitize.ts";
 import type { JudgeOutput } from "../judge/types.ts";
@@ -10,6 +10,7 @@ import {
   createRoom,
   decide,
   disconnect,
+  expiresAt,
   join,
   kick,
   nextAlarmAt,
@@ -312,5 +313,19 @@ describe("overrule guard", () => {
     answer(state, ctx, "paris");
     const verdict = state.log[state.log.length - 1]!;
     expect(overrule(state, state.hostId!, verdict.id, ctx)).toMatchObject({ ok: false });
+  });
+});
+
+describe("room lifetime", () => {
+  it("schedules the wipe after the end screen and for empty rooms", () => {
+    const { state, ctx, ids } = setup({ mode: "free" });
+    start(state, state.hostId!, ctx);
+    for (const id of ids) tapOut(state, id, ctx);
+    expect(state.phase).toBe("over");
+    expect(expiresAt(state)).toBe(state.endedAt! + OVER_TTL_MS);
+
+    const lobby = setup({});
+    for (const id of lobby.ids) disconnect(lobby.state, id, lobby.ctx);
+    expect(nextAlarmAt(lobby.state)).toBe(lobby.ctx.now + EMPTY_ROOM_MS);
   });
 });
