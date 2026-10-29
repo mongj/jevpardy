@@ -2,7 +2,6 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "jevpardy",
   "main": "./src/worker/index.ts",
-  "routes": [{ "pattern": "jevpardy.mingjun.dev", "custom_domain": true }],
   "compatibility_date": "2026-10-29",
   "upload_source_maps": true,
   "assets": {
