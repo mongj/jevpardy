@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# build output
+dist/
+.wrangler/
+*.tsbuildinfo
+
+# local secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# logs / os / editor
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+coverage/

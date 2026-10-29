@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "jevpardy",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-10-29",
+  "upload_source_maps": true,
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+  "vars": {
+    // "auto" uses Jev when TYPESAFE_API_KEY is set, otherwise the mock judge. "mock" forces the mock.
+    "JUDGE_MODE": "auto",
+    "JEV_MODEL": "jev-latest",
+    "ACCEPT_THRESHOLD": "0.7",
+    "DUPLICATE_THRESHOLD": "0.75",
+    "MAX_PLAYERS": "12"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}
