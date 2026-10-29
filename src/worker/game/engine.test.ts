@@ -377,4 +377,16 @@ describe("short-list hint", () => {
     configure(state, state.hostId!, {}, "planets", ctx);
     expect(state.shortList).toBe(true);
   });
+
+  it("only asks Jev whether the board is cleared on short-list topics", () => {
+    const { state, ctx } = setup({ mode: "free" });
+    start(state, state.hostId!, ctx);
+    const first = submit(state, current(state), "Paris", ctx);
+    expect(first.ok && first.judge?.askExhausted).toBe(false);
+    if (first.ok && first.judge) resolve(state, first.turnId, ACCEPT, ctx);
+    state.shortList = true;
+    ctx.advance(1000);
+    const second = submit(state, current(state), "Lyon", ctx);
+    expect(second.ok && second.judge?.askExhausted).toBe(true);
+  });
 });

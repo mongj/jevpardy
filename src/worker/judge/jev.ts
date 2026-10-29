@@ -96,7 +96,7 @@ export class JevJudge implements Judge {
       obscurity: OBSCURITY_QUESTION,
     };
     // Past the duplicate cap the board is far too long for the topic to be running dry.
-    const askRemaining = input.prior.length <= MAX_DUPLICATE_CANDIDATES;
+    const askRemaining = input.askExhausted && input.prior.length <= MAX_DUPLICATE_CANDIDATES;
     if (askRemaining) {
       // submitted_answer is repeated here: read from the shared state, this question's score swung 0.25–0.74 on identical input.
       questions.remaining = {

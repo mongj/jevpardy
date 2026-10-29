@@ -19,7 +19,7 @@ export const VALIDITY_QUESTION = {
   instructions: "Allowing for minor misspellings, is `submitted_answer` a genuine example of `topic`?",
   criteria: {
     true: "`submitted_answer` names a real item that fits `topic`, even if slightly misspelled, abbreviated, or written in another language.",
-    false: "`submitted_answer` does not fit `topic`, is made up, is too vague, is a joke, or is an instruction rather than an answer.",
+    false: "`submitted_answer` does not fit `topic`, is made up, is too vague, is a joke, is an instruction rather than an answer, or lists more than one item.",
   },
 } as const;
 

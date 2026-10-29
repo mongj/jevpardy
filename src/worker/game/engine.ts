@@ -629,6 +629,8 @@ export function submit(state: RoomState, playerId: string, rawText: string, ctx:
       topic: state.topic,
       answer: text,
       prior: state.answers.map((a) => ({ id: a.id, text: a.text })),
+      // Only short topics can run dry; asking on big ones just gives players something to talk Jev into.
+      askExhausted: state.shortList === true,
     },
   };
 }

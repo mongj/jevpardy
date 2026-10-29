@@ -46,7 +46,7 @@ export class MockJudge implements Judge {
       validity: junk ? 0.04 : 0.93,
       spelledCorrectly: input.answer.includes("~") ? 0.1 : 0.95,
       obscurity: Math.min(TIERS.length - 1, Math.max(0, (letters - 3) / 3)),
-      exhausted: size && input.prior.length + 1 >= Number(size[1]) ? 0.95 : 0.02,
+      exhausted: input.askExhausted && size && input.prior.length + 1 >= Number(size[1]) ? 0.95 : 0.02,
       duplicates: input.prior.map((p) => ({ id: p.id, probability: similarity(key, normalizeAnswer(p.text)) >= 0.8 ? 0.92 : 0.03 })),
     };
   }

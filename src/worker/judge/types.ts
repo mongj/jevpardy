@@ -9,6 +9,8 @@ export interface JudgeInput {
   topic: string;
   answer: string;
   prior: PriorAnswer[];
+  /** Ask whether this answer leaves nothing to name (short-list topics only). */
+  askExhausted: boolean;
 }
 
 export type JudgeOutput =
