@@ -17,7 +17,7 @@ function survival(p: PublicPlayer, state: PublicState): string {
 function endLine(reason: EndReason | null, winner: PublicPlayer): string {
   switch (reason) {
     case "lastStanding":
-      return "Last one floating";
+      return "Last one standing";
     case "cleared":
       return "Board cleared";
     case "allOut":
@@ -121,7 +121,7 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
                 <td>{p.stats.accepted}</td>
                 <td>{p.stats.rejected}</td>
                 <td>{survival(p, state)}</td>
-                <td className="hide-sm">{p.stats.bestAnswer ? <span style={{ color: tierById(p.stats.bestTier ?? "basic").color }}>{p.stats.bestAnswer}</span> : "–"}</td>
+                <td className="hide-sm">{p.stats.bestAnswer ? <span style={{ color: tierById(p.stats.bestTier ?? "easy").color }}>{p.stats.bestAnswer}</span> : "–"}</td>
               </tr>
             ))}
           </tbody>

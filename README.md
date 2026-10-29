@@ -26,7 +26,7 @@ The whole thing is one Cloudflare Worker: static assets, an HTTP API, and one Du
 | Timeout | −1 ♥, turn passes | n/a |
 | Wrong / repeated answer | Default: no penalty, keep trying while the clock runs. *Sudden death* option: −1 ♥ and the turn passes | No penalty, keep trying |
 | Out | 0 ♥ = K.O. You keep spectating | You *tap out* for good |
-| Game ends | When only one player is left standing (**last one floating wins**). A solo game runs until your last heart | When everyone has tapped out |
+| Game ends | When only one player is left standing (**last one standing wins**). A solo game runs until your last heart | When everyone has tapped out |
 | Late joiners | Spectate until the next game | Jump straight into the rotation |
 
 In both modes the host can end the game at any time. Jev can also end it by declaring the **board cleared**: an accepted answer was the last thing left to name (see below).
@@ -39,11 +39,11 @@ Jev rates every accepted answer's obscurity on a five-level scale:
 
 | Tier | Points | |
 |---|---|---|
-| BASIC | 10 | The one everybody blurts out |
-| SOLID | 25 | Well known |
-| RARE | 50 | Genuinely uncommon |
-| DEEP CUT | 80 | Few go this deep |
-| 1 IN A JEVILLION | 100 | Trench floor |
+| EASY | 10 | The one everybody blurts out |
+| NORMAL | 25 | Well known |
+| HARD | 50 | Genuinely uncommon |
+| BOSS LEVEL | 80 | True obscurity |
+| SECRET LEVEL | 100 | Almost nobody would think of it |
 
 In timed mode, points also fill a **1UP meter**: every 200 points earns +1 ♥, up to 5.
 
@@ -51,13 +51,13 @@ In timed mode, points also fill a **1UP meter**: every 200 points earns +1 ♥, 
 
 - **Wrong answers retry by default.** The clock is the penalty, as in Puffer Party ("answer before the puffer explodes on you"). An AI judge will occasionally misjudge, and a heart lost to a misjudgment feels bad. Hosts who want the harsher rule switch on *Sudden death* (wrong or repeated answer costs a heart and passes the turn).
 - **The clock freezes while Jev judges.** Judging latency never costs a life. After a verdict you get your remaining time back, with at least 1 s.
-- **Last one floating wins.** In a multiplayer timed game, the game ends when one player remains, and they win. The brief said "ends when all players have died", but making the survivor play on alone is dull, so I took the Puffer Party rule. A solo game plays until the last heart.
+- **Last one standing wins.** In a multiplayer timed game, the game ends when one player remains, and they win. The brief said "ends when all players have died", but making the survivor play on alone is dull. A solo game plays until the last heart.
 - **The host is the referee.** The host can **overrule** Jev's latest rejection (the answer is credited and any heart it cost is refunded), **skip** a stuck turn, **kick** a player, **end** the game, or start a **rematch** with a new topic. Exact repeats can't be overruled.
 - **Free mode skips absent players.** A disconnected current player is skipped after 20 s. Timed mode keeps them in the rotation, so their clock runs out like anyone else's.
 - **Board cleared.** Small topics run dry ("planets", "Beatles members"). Without a check, a timed game would turn into players timing out one by one, and a free game would stall. So every judgment also asks Jev whether anything is left to name. When an accepted answer clears the board, the game ends at once. Everyone still in gets +50 points, and whoever named the last answer gets the FINAL ANSWER award. The lobby warns when a topic looks like a *short list*.
 - **Host handover.** If the host is disconnected for 20 s, the crown passes to the next connected player.
 - **Ranking.** Timed: survivors first, then by how late you were knocked out, then points. Free: points, then number of answers.
-- **Awards on the end screen:** Last One Floating, Final Answer (cleared the board), High Score, Deep Diver (rarest answer), Speed Demon (fastest accepted answer) and Jev's Nemesis (most rejections).
+- **Awards on the end screen:** Last One Standing, Final Answer (cleared the board), High Score, Rarest Find, Speed Demon (fastest accepted answer) and Jev's Nemesis (most rejections).
 
 ---
 

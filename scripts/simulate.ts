@@ -243,7 +243,7 @@ async function runTimed(): Promise<string[]> {
   }
   const events = bots[0]!.events;
   const sleepy = final.players.find((p) => p.name === "SleepyBot")!;
-  check("game ended with the last one floating", final.phase === "over" && final.endReason === "lastStanding", failures);
+  check("game ended with the last one standing", final.phase === "over" && final.endReason === "lastStanding", failures);
   check("sleepy bot timed out and was eliminated", sleepy.status === "eliminated" && sleepy.stats.timeouts === 2, failures);
   check("an exact duplicate was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "duplicate"), failures);
   check("a wrong answer was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "invalid"), failures);

@@ -485,7 +485,7 @@ function checkGameOver(state: RoomState, ctx: Ctx): GameEvent[] {
   if (state.phase !== "playing") return [];
   const alive = activePlayers(state);
   const timed = state.settings.mode === "timed";
-  // Last one floating wins in a multiplayer timed game; solo games play to the last heart.
+  // Last one standing wins in a multiplayer timed game; solo games play to the last heart.
   const lastStanding = timed && state.startingPlayers > 1 && alive.length === 1 && contestants(state).length > 1;
   if (alive.length === 0) return finish(state, ctx, "allOut");
   if (lastStanding) return finish(state, ctx, "lastStanding");
@@ -540,7 +540,7 @@ function computeAwards(state: RoomState): Award[] {
 
   if (state.endReason === "lastStanding") {
     const survivor = roster.find((p) => p.status === "alive");
-    if (survivor) awards.push({ id: "survivor", title: "LAST ONE FLOATING", blurb: "Outlasted everyone.", playerId: survivor.id });
+    if (survivor) awards.push({ id: "survivor", title: "LAST ONE STANDING", blurb: "Outlasted everyone.", playerId: survivor.id });
   }
   const closer = state.answers[state.answers.length - 1];
   if (state.endReason === "cleared" && closer) {
@@ -551,16 +551,16 @@ function computeAwards(state: RoomState): Award[] {
     (a, b) => a > b,
   );
   if (high) awards.push({ id: "highscore", title: "HIGH SCORE", blurb: `${high.value} pts`, playerId: high.winner.id });
-  const deep = best(
+  const rarest = best(
     (p) => (p.stats.bestTier ? tierIndex(p.stats.bestTier) : null),
     (a, b) => a > b,
   );
-  if (deep && deep.value >= 2) {
+  if (rarest && rarest.value >= 2) {
     awards.push({
-      id: "deepdiver",
-      title: "DEEP DIVER",
-      blurb: `"${deep.winner.stats.bestAnswer}" — ${TIERS[deep.value]!.name}`,
-      playerId: deep.winner.id,
+      id: "rarest",
+      title: "RAREST FIND",
+      blurb: `"${rarest.winner.stats.bestAnswer}" — ${TIERS[rarest.value]!.name}`,
+      playerId: rarest.winner.id,
     });
   }
   const fast = best(
@@ -641,7 +641,7 @@ export interface Decision {
 
 export function decide(output: JudgeOutput, thresholds: Thresholds, answers: AcceptedAnswer[]): Decision {
   if (!output.ok) {
-    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", boardCleared: false };
+    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "easy", boardCleared: false };
   }
   const tierLevel = Math.min(TIERS.length - 1, Math.max(0, Math.round(output.obscurity)));
   const tier = TIERS[tierLevel]!.id;
@@ -882,7 +882,7 @@ export function overrule(state: RoomState, actorId: string, verdictId: string, c
   }
   state.log.pop();
   touch(state, ctx);
-  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", confidence: last.confidence, boardCleared: false }, true, ctx);
+  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "easy", confidence: last.confidence, boardCleared: false }, true, ctx);
   return { ok: true, events };
 }
 

@@ -15,7 +15,7 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <li>Players take turns naming something that fits. Jev, the AI judge, decides in a blink. Small typos are forgiven.</li>
           <li>No repeats! "München" after "Munich" counts as a repeat.</li>
           <li>
-            <b>TIMED:</b> answer before the clock hits zero or lose a ♥. Wrong answers just burn time (unless the host turns on <i>sudden death</i>). Zero hearts = K.O. Last one floating wins.
+            <b>TIMED:</b> answer before the clock hits zero or lose a ♥. Wrong answers just burn time (unless the host turns on <i>sudden death</i>). Zero hearts = K.O. Last one standing wins.
           </li>
           <li>
             <b>FREE & EASY:</b> no clock, no hearts. Keep naming things until you're out of ideas, then tap out. Most points wins.

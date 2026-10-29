@@ -8,7 +8,7 @@ export function ModePicker({ mode, onChange, disabled }: { mode: GameSettings["m
       <button type="button" role="radio" aria-checked={mode === "timed"} disabled={disabled} className={`mode-card ${mode === "timed" ? "on" : ""}`} onClick={() => onChange("timed")}>
         <span className="mode-icon">⏱</span>
         <span className="mode-name">TIMED</span>
-        <span className="mode-desc">Beat the clock. Hearts on the line. Last one floating wins.</span>
+        <span className="mode-desc">Beat the clock. Hearts on the line. Last one standing wins.</span>
       </button>
       <button type="button" role="radio" aria-checked={mode === "free"} disabled={disabled} className={`mode-card ${mode === "free" ? "on" : ""}`} onClick={() => onChange("free")}>
         <span className="mode-icon">☕</span>
