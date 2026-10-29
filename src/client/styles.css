@@ -398,14 +398,6 @@ textarea.topic-input {
   }
 }
 
-.tagline {
-  font-family: var(--display);
-  font-size: 10px;
-  color: var(--cyan);
-  letter-spacing: 0.2em;
-  margin: 0;
-}
-
 .home-jev {
   display: flex;
   align-items: center;
@@ -439,14 +431,6 @@ textarea.topic-input {
   50% {
     transform: translateY(-8px);
   }
-}
-
-.insert-coin {
-  font-family: var(--display);
-  font-size: 14px;
-  color: var(--pink);
-  margin-top: 8px;
-  text-shadow: 0 0 10px rgba(255, 79, 216, 0.6);
 }
 
 .home-actions {

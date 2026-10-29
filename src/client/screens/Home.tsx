@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ROOM_CODE_LENGTH } from "../../shared/constants.ts";
 import type { HealthResponse } from "../../shared/protocol.ts";
 import { JevBot, Sprite } from "../components/Pixel.tsx";
-import { Blink, PixelButton } from "../components/ui.tsx";
+import { PixelButton } from "../components/ui.tsx";
 import { navigate } from "../lib/router.ts";
 import { sfx, unlockAudio } from "../lib/sfx.ts";
 import { HowToPlay } from "./HowToPlay.tsx";
@@ -44,12 +44,10 @@ export function Home() {
           ))}
         </div>
         <Logo />
-        <p className="tagline">UNLIMITED GENERATIVE TRIVIA</p>
         <div className="home-jev">
           <JevBot mood="idle" size={88} className="float" />
           <div className="speech">Pick ANY topic. I'll judge every answer. No repeats!</div>
         </div>
-        <Blink className="insert-coin">INSERT COIN</Blink>
       </div>
 
       <div className="home-actions">
@@ -99,17 +97,11 @@ export function Home() {
         </button>
       </div>
 
-      <footer className="home-foot small muted">
-        {judge?.judge === "jev" ? (
-          <span>
-            JUDGED BY <b className="glow-cyan">JEV</b> · {judge.model}
-          </span>
-        ) : judge?.judge === "mock" ? (
+      {judge?.judge === "mock" && (
+        <footer className="home-foot small muted">
           <span className="glow-pink">MOCK JUDGE MODE — set TYPESAFE_API_KEY for the real Jev</span>
-        ) : (
-          <span>&nbsp;</span>
-        )}
-      </footer>
+        </footer>
+      )}
       {howTo && <HowToPlay onClose={() => setHowTo(false)} />}
     </main>
   );
