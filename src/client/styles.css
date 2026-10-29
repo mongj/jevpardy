@@ -235,7 +235,6 @@ b {
   position: relative;
   text-transform: uppercase;
   box-shadow:
-    0 0 0 var(--px) #05040f,
     inset 0 calc(-1 * var(--px)) 0 0 var(--shade),
     inset var(--px) var(--px) 0 0 color-mix(in srgb, var(--c) 60%, white);
   transition: transform 60ms steps(2);
@@ -246,9 +245,7 @@ b {
 }
 .px-btn:active:not(:disabled) {
   transform: translateY(var(--px));
-  box-shadow:
-    0 0 0 var(--px) #05040f,
-    inset 0 var(--px) 0 0 var(--shade);
+  box-shadow: inset 0 var(--px) 0 0 var(--shade);
 }
 .px-btn:disabled {
   filter: grayscale(0.85) brightness(0.55);
@@ -1068,7 +1065,7 @@ input.code-input {
   gap: 4px;
   align-items: stretch;
 }
-/* The button's dark outline is invisible on the page background, so its face has to fill the full input height. */
+/* Without the default button margin, SEND stretches to the full input height. */
 .answer-form .px-btn {
   margin: 0 0 0 8px;
 }
