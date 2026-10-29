@@ -304,8 +304,14 @@ b {
   background: none;
   border: 0;
   font-size: 22px;
+  color: var(--dim);
   cursor: pointer;
   padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+}
+.icon-btn:hover {
+  color: var(--ink);
 }
 
 input.name-input,

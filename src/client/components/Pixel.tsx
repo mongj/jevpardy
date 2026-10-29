@@ -171,10 +171,14 @@ const ICONS = {
   right: ["X...", "XX..", "XXX.", "XXXX", "XXX.", "XX..", "X..."],
   left: ["...X", "..XX", ".XXX", "XXXX", ".XXX", "..XX", "...X"],
   replay: ["..XXX.X", ".X...XX", "X...XXX", "X......", "X.....X", ".X...X.", "..XXX.."],
+  soundOn: ["...X...X.", "..XX.X..X", "XXXX..X.X", "XXXX..X.X", "XXXX..X.X", "..XX.X..X", "...X...X."],
+  soundOff: ["...X.....", "..XX.....", "XXXX.X.X.", "XXXX..X..", "XXXX.X.X.", "..XX.....", "...X....."],
 } as const;
 
-/** Pixel glyphs for button labels; the display font has no arrows, and fallback-font glyphs sit off-centre. */
-export function Icon({ name }: { name: keyof typeof ICONS }) {
+export type IconName = keyof typeof ICONS;
+
+/** One-colour pixel glyphs on the display font's 7-pixel grid; emoji and fallback-font symbols break the pixel style. */
+export function Icon({ name }: { name: IconName }) {
   const rows = ICONS[name];
   const w = rows[0].length;
   return (

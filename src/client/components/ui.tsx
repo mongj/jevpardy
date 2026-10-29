@@ -1,5 +1,6 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { isMuted, onMuteChange, setMuted, sfx, unlockAudio } from "../lib/sfx.ts";
+import { Icon } from "./Pixel.tsx";
 
 type Tone = "yellow" | "cyan" | "pink" | "green" | "red" | "ghost";
 
@@ -115,7 +116,7 @@ export function MuteButton() {
       aria-label={muted ? "Unmute" : "Mute"}
       title={muted ? "Sound off" : "Sound on"}
     >
-      {muted ? "🔇" : "🔊"}
+      <Icon name={muted ? "soundOff" : "soundOn"} />
     </button>
   );
 }
