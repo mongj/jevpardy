@@ -1282,23 +1282,6 @@ input.answer-input:disabled {
   margin: 6px 4px 0;
 }
 
-.verdict-log {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
-  font-size: 18px;
-}
-.verdict-log li {
-  padding: 2px 0;
-  animation: fade-in 300ms steps(3);
-}
-.verdict-log .no {
-  color: var(--dim);
-}
-.verdict-log .ok {
-  color: var(--green);
-}
-
 .emote-bar {
   display: flex;
   gap: 6px;

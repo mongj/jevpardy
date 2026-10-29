@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MAX_ANSWER_LENGTH, tierById } from "../../shared/constants.ts";
+import { MAX_ANSWER_LENGTH } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
 import { normalizeAnswer } from "../../shared/sanitize.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
@@ -199,16 +199,6 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
         <AnswerWall answers={state.answers} players={state.players} highlightId={freshAnswerId} />
         <div className="side">
           <PlayerRail state={state} meId={meId} onKick={isHost ? (id) => send({ type: "kick", playerId: id }) : undefined} />
-          <ul className="verdict-log">
-            {[...state.log]
-              .reverse()
-              .slice(0, 6)
-              .map((v) => (
-                <li key={v.id} className={v.accepted ? "ok" : "no"} style={v.tier && v.accepted ? { color: tierById(v.tier).color } : undefined}>
-                  {verdictLine(v, nameOf(v.playerId))}
-                </li>
-              ))}
-          </ul>
         </div>
       </div>
 
