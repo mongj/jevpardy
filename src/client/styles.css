@@ -342,7 +342,9 @@ textarea.topic-input {
 
 .home {
   min-height: 100dvh;
-  justify-content: space-between;
+  padding-top: max(24px, env(safe-area-inset-top));
+  justify-content: center;
+  gap: 40px;
 }
 
 .home-hero {
@@ -351,7 +353,6 @@ textarea.topic-input {
   align-items: center;
   text-align: center;
   gap: 12px;
-  padding-top: 4vh;
 }
 
 .invaders {
