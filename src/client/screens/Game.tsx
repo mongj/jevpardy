@@ -48,19 +48,21 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
   const inputRef = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
 
-  useEffect(() => {
-    if (myTurn && !turn?.judging) inputRef.current?.focus();
-  }, [myTurn, turn?.id, turn?.judging]);
+  const canSend = myTurn && !turn?.judging;
 
   useEffect(() => {
-    setDraft("");
-  }, [turn?.id]);
+    if (!canSend) return;
+    inputRef.current?.focus();
+    // Anything typed ahead while waiting becomes the live preview once the turn starts.
+    if (draft) send({ type: "typing", text: draft });
+  }, [canSend, turn?.id]);
 
   const onType = (value: string) => {
     const next = value.slice(0, MAX_ANSWER_LENGTH);
     setDraft(next);
     const now = Date.now();
-    if (now - lastTyping.current > 120) {
+    // Typing ahead stays private until it's your turn.
+    if (canSend && now - lastTyping.current > 120) {
       lastTyping.current = now;
       send({ type: "typing", text: next });
     }
@@ -68,7 +70,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
 
   const submit = () => {
     const text = draft.trim();
-    if (!text || !myTurn || turn?.judging) return;
+    if (!text || !canSend) return;
     send({ type: "submit", text });
     setDraft("");
   };
@@ -155,15 +157,14 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
               className="answer-input"
               value={draft}
               onChange={(e) => onType(e.target.value)}
-              placeholder={myTurn ? (turn?.judging ? "JEV IS THINKING…" : "TYPE AN ANSWER") : `WAIT FOR YOUR TURN…`}
-              disabled={!myTurn || !!turn?.judging}
+              placeholder={myTurn ? (turn?.judging ? "JEV IS THINKING…" : "TYPE AN ANSWER") : "GET AN ANSWER READY…"}
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
               enterKeyHint="send"
               maxLength={MAX_ANSWER_LENGTH}
             />
-            <PixelButton tone="green" type="submit" disabled={!myTurn || !!turn?.judging || !draft.trim()}>
+            <PixelButton tone="green" type="submit" disabled={!canSend || !draft.trim()}>
               SEND
             </PixelButton>
           </form>

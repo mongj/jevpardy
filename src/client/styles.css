@@ -1061,9 +1061,6 @@ input.answer-input {
     inset 0 0 0 var(--px) var(--yellow),
     0 0 22px rgba(255, 210, 63, 0.35);
 }
-input.answer-input:disabled {
-  opacity: 0.55;
-}
 .shake-once {
   animation: jitter 0.06s steps(2) 6;
 }
