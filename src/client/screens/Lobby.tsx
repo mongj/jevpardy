@@ -68,7 +68,7 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
         )}
         {state.shortList && (
           <p className="short-list small" role="note">
-            📏 SHORT LIST — Jev reckons this topic has under ~20 answers. When Jev thinks they've all been named, the game ends: BOARD CLEARED!
+            <Icon name="list" font="body" /> SHORT LIST — Jev reckons this topic has under ~20 answers. When Jev thinks they've all been named, the game ends: BOARD CLEARED!
           </p>
         )}
         {isHost ? (
@@ -91,7 +91,7 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
               </span>
               {isHost && p.id !== meId && (
                 <button type="button" className="kick-btn" onClick={() => send({ type: "kick", playerId: p.id })} aria-label={`Kick ${p.name}`}>
-                  ✕
+                  <Icon name="close" />
                 </button>
               )}
             </li>
@@ -103,7 +103,9 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
             </li>
           )}
         </ul>
-        {spectators.length > 0 && <p className="small muted">👀 {spectators.map((s) => s.name).join(", ")} watching</p>}
+        {spectators.length > 0 && <p className="small muted">
+            <Icon name="eye" font="body" /> {spectators.map((s) => s.name).join(", ")} watching
+          </p>}
         {me?.role === "spectator" && (
           <PixelButton tone="cyan" onClick={() => send({ type: "becomePlayer" })}>
             JOIN AS PLAYER

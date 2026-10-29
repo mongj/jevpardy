@@ -1,9 +1,9 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { type ReactNode, forwardRef, useImperativeHandle, useRef, useState } from "react";
 
 export interface Burst {
   id: number;
-  text: string;
-  sub?: string;
+  text: ReactNode;
+  sub?: ReactNode;
   color: string;
   kind: "pop" | "big" | "float";
 }

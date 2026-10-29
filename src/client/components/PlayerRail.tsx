@@ -1,6 +1,6 @@
 import { BONUS_LIFE_POINTS } from "../../shared/constants.ts";
 import type { PublicPlayer, PublicState } from "../../shared/protocol.ts";
-import { Crown, Hearts, Sprite } from "./Pixel.tsx";
+import { Crown, Hearts, Icon, Sprite } from "./Pixel.tsx";
 
 export function PlayerChip({ player, state, meId, active, onKick }: { player: PublicPlayer; state: PublicState; meId: string; active: boolean; onKick?: () => void }) {
   const out = player.status === "eliminated" || player.status === "tappedOut";
@@ -32,7 +32,7 @@ export function PlayerChip({ player, state, meId, active, onKick }: { player: Pu
       {state.phase !== "lobby" && <span className="player-points">{player.points}</span>}
       {onKick && (
         <button type="button" className="kick-btn" onClick={onKick} aria-label={`Kick ${player.name}`} title="Kick">
-          ✕
+          <Icon name="close" />
         </button>
       )}
     </li>
@@ -60,7 +60,7 @@ export function PlayerRail({ state, meId, onKick }: { state: PublicState; meId: 
       </ul>
       {spectators.length > 0 && (
         <p className="spectators small muted">
-          👀 {spectators.length} watching: {spectators.map((s) => s.name).join(", ")}
+          <Icon name="eye" font="body" /> {spectators.length} watching: {spectators.map((s) => s.name).join(", ")}
         </p>
       )}
     </div>

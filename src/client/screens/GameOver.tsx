@@ -104,8 +104,12 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
               <th>#</th>
               <th>NAME</th>
               <th>PTS</th>
-              <th>✔</th>
-              <th>✘</th>
+              <th aria-label="accepted">
+                <Icon name="check" />
+              </th>
+              <th aria-label="bounced">
+                <Icon name="close" />
+              </th>
               <th>{timed ? "ALIVE" : "TIME"}</th>
               <th className="hide-sm">BEST</th>
             </tr>

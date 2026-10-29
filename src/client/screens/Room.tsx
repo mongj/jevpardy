@@ -127,15 +127,23 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
               vibrate([90, 40, 90]);
             }
             f?.burst({
-              text: e.reason === "timeout" ? "TIME'S UP!" : "-1 ♥",
-              sub: `${e.playerId === meId ? "YOU" : nameOf(e.playerId)} · ${e.livesLeft} ♥ LEFT`,
+              text: e.reason === "timeout" ? "TIME'S UP!" : <>-1 <Icon name="heart" className="heart-glyph" /></>,
+              sub: (
+                <>
+                  {e.playerId === meId ? "YOU" : nameOf(e.playerId)} · {e.livesLeft} <Icon name="heart" font="body" className="heart-glyph" /> LEFT
+                </>
+              ),
               color: "var(--red)",
               kind: "big",
             });
             break;
           case "lifeEarned":
             sfx.oneUp();
-            f?.burst({ text: "1UP!", sub: `${nameOf(e.playerId)} +1 ♥`, color: "var(--green)", kind: "pop" });
+            f?.burst({ text: "1UP!", sub: (
+                <>
+                  {nameOf(e.playerId)} +1 <Icon name="heart" font="body" className="heart-glyph" />
+                </>
+              ), color: "var(--green)", kind: "pop" });
             break;
           case "eliminated":
             setTimeout(() => {

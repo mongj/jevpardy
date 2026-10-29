@@ -1,17 +1,23 @@
+import type { ReactNode } from "react";
 import { SETTINGS_LIMITS } from "../../shared/constants.ts";
 import type { GameSettings } from "../../shared/protocol.ts";
+import { Icon } from "../components/Pixel.tsx";
 import { Stepper, Toggle } from "../components/ui.tsx";
 
 export function ModePicker({ mode, onChange, disabled }: { mode: GameSettings["mode"]; onChange: (m: GameSettings["mode"]) => void; disabled?: boolean }) {
   return (
     <div className="mode-picker" role="radiogroup" aria-label="Game mode">
       <button type="button" role="radio" aria-checked={mode === "timed"} disabled={disabled} className={`mode-card ${mode === "timed" ? "on" : ""}`} onClick={() => onChange("timed")}>
-        <span className="mode-icon">⏱</span>
+        <span className="mode-icon">
+          <Icon name="stopwatch" />
+        </span>
         <span className="mode-name">TIMED</span>
         <span className="mode-desc">Beat the clock. Hearts on the line. Last one standing wins.</span>
       </button>
       <button type="button" role="radio" aria-checked={mode === "free"} disabled={disabled} className={`mode-card ${mode === "free" ? "on" : ""}`} onClick={() => onChange("free")}>
-        <span className="mode-icon">☕</span>
+        <span className="mode-icon">
+          <Icon name="cup" />
+        </span>
         <span className="mode-name">FREE & EASY</span>
         <span className="mode-desc">No clock. No hearts. Tap out when you're stumped.</span>
       </button>
@@ -45,10 +51,15 @@ export function TimedSettings({ settings, onChange, disabled }: { settings: Game
   );
 }
 
-export function settingsSummary(s: GameSettings): string {
+export function settingsSummary(s: GameSettings): ReactNode {
   if (s.mode === "free") return "FREE & EASY · no clock · tap out when stumped";
-  const parts = [`${s.lives}♥`, s.mysteryFuse ? `~${s.turnSeconds}s mystery fuse` : `${s.turnSeconds}s turns`];
+  const parts = [s.mysteryFuse ? `~${s.turnSeconds}s mystery fuse` : `${s.turnSeconds}s turns`];
   if (s.wrongAnswer === "life") parts.push("sudden death");
   if (s.speedUp) parts.push("speed up");
-  return `TIMED · ${parts.join(" · ")}`;
+  return (
+    <>
+      TIMED · {s.lives}
+      <Icon name="heart" font="body" className="heart-glyph" /> · {parts.join(" · ")}
+    </>
+  );
 }

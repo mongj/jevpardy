@@ -57,14 +57,14 @@ export function Stepper({
       <span className="stepper-label">{label}</span>
       <div className="stepper-controls">
         <button type="button" className="step-btn" disabled={disabled || value <= min} onClick={() => onChange(value - 1)} aria-label={`less ${label}`}>
-          −
+          <Icon name="minus" />
         </button>
         <span className="stepper-value">
           {value}
           {suffix}
         </span>
         <button type="button" className="step-btn" disabled={disabled || value >= max} onClick={() => onChange(value + 1)} aria-label={`more ${label}`}>
-          +
+          <Icon name="plus" />
         </button>
       </div>
     </div>

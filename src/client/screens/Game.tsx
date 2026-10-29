@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { MAX_ANSWER_LENGTH } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
 import { Countdown, Fuse } from "../components/Countdown.tsx";
-import { EMOTE_LABELS, EmoteArt, JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
+import { EMOTE_LABELS, EmoteArt, Icon, JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
 import { PlayerRail } from "../components/PlayerRail.tsx";
 import { Blink, PixelButton } from "../components/ui.tsx";
 
@@ -18,17 +18,18 @@ interface GameProps {
   inputShakeKey: number;
 }
 
-function verdictLine(v: Verdict, name: string): string {
-  if (v.accepted) return `${name}: "${v.text}" ✔`;
+function verdictLine(v: Verdict, name: string): ReactNode {
+  const said = `${name}: "${v.text}" `;
+  if (v.accepted) return <>{said}<Icon name="check" font="body" /></>;
   switch (v.reason) {
     case "duplicate":
-      return `${name}: "${v.text}" ✘ repeat${v.duplicateOf ? ` of "${v.duplicateOf}"` : ""}`;
+      return <>{said}<Icon name="close" font="body" /> repeat{v.duplicateOf ? ` of "${v.duplicateOf}"` : ""}</>;
     case "invalid":
-      return `${name}: "${v.text}" ✘ doesn't fit`;
+      return <>{said}<Icon name="close" font="body" /> doesn't fit</>;
     case "judge_error":
-      return `${name}: "${v.text}" ⚠ Jev glitched`;
+      return <>{said}<Icon name="warn" font="body" /> Jev glitched</>;
     case null:
-      return `${name}: "${v.text}"`;
+      return said;
     default: {
       const unknown: never = v.reason;
       return String(unknown);
@@ -116,7 +117,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
                 ) : liveText && !myTurn ? (
                   <span className="bubble-text typing">
                     {liveText}
-                    <span className="caret">▌</span>
+                    <span className="caret" aria-hidden="true" />
                   </span>
                 ) : lastVerdict ? (
                   <span className={`small ${lastVerdict.accepted ? "glow-green" : "glow-pink"}`}>{verdictLine(lastVerdict, nameOf(lastVerdict.playerId))}</span>
@@ -134,7 +135,9 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
       <div className="dock">
         {me?.role === "spectator" ? (
           <div className="dock-msg">
-            <span>👀 SPECTATING</span>
+            <span>
+              <Icon name="eye" /> SPECTATING
+            </span>
             {state.settings.mode === "free" && (
               <PixelButton tone="cyan" onClick={() => send({ type: "becomePlayer" })}>
                 JUMP IN
@@ -142,7 +145,17 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
             )}
           </div>
         ) : out ? (
-          <div className="dock-msg">{me?.status === "eliminated" ? "☠ K.O. — YOU'RE SPECTATING NOW" : "✋ TAPPED OUT — ENJOY THE SHOW"}</div>
+          <div className="dock-msg">
+            {me?.status === "eliminated" ? (
+              <span>
+                <Icon name="skull" /> K.O. — YOU'RE SPECTATING NOW
+              </span>
+            ) : (
+              <span>
+                <Icon name="hand" /> TAPPED OUT — ENJOY THE SHOW
+              </span>
+            )}
+          </div>
         ) : (
           <form
             key={inputShakeKey}
@@ -171,7 +184,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
         )}
         {state.settings.mode === "free" && me?.status === "alive" && (
           <button type="button" className="link-btn tapout" onClick={() => confirm("Tap out for good?") && send({ type: "tapOut" })}>
-            ✋ TAP OUT
+            <Icon name="hand" /> TAP OUT
           </button>
         )}
       </div>
@@ -191,17 +204,17 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
         ))}
         {isHost && (
           <button type="button" className="emote-btn host-btn" onClick={() => setHostMenu((v) => !v)} aria-expanded={hostMenu}>
-            ⚙ HOST
+            <Icon name="gear" /> HOST
           </button>
         )}
       </div>
       {isHost && hostMenu && (
         <div className="host-menu panel accent-yellow">
           <PixelButton tone="cyan" onClick={() => send({ type: "skip" })} disabled={!turn || !!turn.judging}>
-            ⏭ SKIP TURN
+            <Icon name="skip" /> SKIP TURN
           </PixelButton>
           <PixelButton tone="red" onClick={() => confirm("End the game for everyone?") && send({ type: "end" })}>
-            ■ END GAME
+            <Icon name="stop" /> END GAME
           </PixelButton>
         </div>
       )}

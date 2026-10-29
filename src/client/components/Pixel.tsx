@@ -174,16 +174,45 @@ const ICONS = {
   replay: ["..XXX.X", ".X...XX", "X...XXX", "X......", "X.....X", ".X...X.", "..XXX.."],
   soundOn: ["...X...X.", "..XX.X..X", "XXXX..X.X", "XXXX..X.X", "XXXX..X.X", "..XX.X..X", "...X...X."],
   soundOff: ["...X.....", "..XX.....", "XXXX.X.X.", "XXXX..X..", "XXXX.X.X.", "..XX.....", "...X....."],
+  hand: [".X.X.X.", ".X.X.X.", ".XXXXX.", "XXXXXX.", ".XXXXX.", ".XXXXX.", "..XXX.."],
+  gear: ["X..X..X", ".XXXXX.", ".XX.XX.", "XX...XX", ".XX.XX.", ".XXXXX.", "X..X..X"],
+  skip: ["X...X..X", "XX..XX.X", "XXX.XXXX", "XXXXXXXX", "XXX.XXXX", "XX..XX.X", "X...X..X"],
+  stop: [".....", "XXXXX", "XXXXX", "XXXXX", "XXXXX", "XXXXX", "....."],
+  close: ["XX...XX", "XXX.XXX", ".XXXXX.", "..XXX..", ".XXXXX.", "XXX.XXX", "XX...XX"],
+  check: ["......X", ".....XX", "X...XX.", "XX.XX..", ".XXX...", "..X....", "......."],
+  warn: ["...X...", "..XXX..", "..X.X..", ".XX.XX.", ".XXXXX.", "XXX.XXX", "XXXXXXX"],
+  pause: ["XX.XX", "XX.XX", "XX.XX", "XX.XX", "XX.XX", "XX.XX", "XX.XX"],
+  minus: [".....", ".....", ".....", "XXXXX", ".....", ".....", "....."],
+  plus: [".....", "..X..", "..X..", "XXXXX", "..X..", "..X..", "....."],
+  skull: [".XXXXX.", "XXXXXXX", "X..X..X", "XXXXXXX", ".XX.XX.", ".XXXXX.", ".X.X.X."],
+  eye: [".......", "..XXX..", ".X...X.", "X..X..X", ".X...X.", "..XXX..", "......."],
+  list: ["X.XXXXX", ".......", "X.XXXXX", ".......", "X.XXX..", ".......", "......."],
+  stopwatch: ["..XXX..", "...X...", ".XXXXX.", "X..X..X", "X..XX.X", "X.....X", ".XXXXX."],
+  cup: ["..X.X..", ".X.X...", "XXXXXX.", "XXXXX.X", "XXXXX.X", "XXXXXX.", ".XXXX.."],
+  heart: [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."],
 } as const;
 
 export type IconName = keyof typeof ICONS;
 
-/** One-colour pixel glyphs on the display font's 7-pixel grid; emoji and fallback-font symbols break the pixel style. */
-export function Icon({ name }: { name: IconName }) {
+/**
+ * One-colour pixel glyphs; emoji and fallback-font symbols break the pixel style. "display" matches Press Start 2P
+ * (one pixel = 1/8 em, capitals span 0.125–1em above the baseline); "body" matches VT323 (capitals span 0–0.56em).
+ */
+export function Icon({ name, font = "display", className }: { name: IconName; font?: "display" | "body"; className?: string }) {
   const rows = ICONS[name];
   const w = rows[0].length;
+  const unit = font === "display" ? 0.125 : 0.1;
+  const capCentre = font === "display" ? 0.5625 : 0.28;
   return (
-    <svg className="px-icon" width={`${w / 8}em`} height="0.875em" viewBox={`0 0 ${w} 7`} shapeRendering="crispEdges" aria-hidden="true">
+    <svg
+      className={`px-icon ${className ?? ""}`}
+      width={`${w * unit}em`}
+      height={`${rows.length * unit}em`}
+      viewBox={`0 0 ${w} ${rows.length}`}
+      style={{ verticalAlign: `${capCentre - (rows.length * unit) / 2}em` }}
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+    >
       {pixels(rows, { X: "currentColor" }).map((p) => (
         <rect key={`${p.x}-${p.y}`} x={p.x} y={p.y} width={1.02} height={1.02} fill={p.fill} />
       ))}

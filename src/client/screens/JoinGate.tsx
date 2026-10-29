@@ -36,7 +36,7 @@ export function JoinGate({ code, onJoin }: { code: string; onJoin: (name: string
             <p className="label">TOPIC</p>
             <p className="topic-big">{info.topic}</p>
             <p className="muted small">
-              {info.mode === "timed" ? "⏱ TIMED" : "☕ FREE & EASY"} · {info.players}/{info.maxPlayers} players · {info.phase === "lobby" ? "waiting to start" : info.phase === "playing" ? "in progress" : "finished"}
+              <Icon name={info.mode === "timed" ? "stopwatch" : "cup"} font="body" /> {info.mode === "timed" ? "TIMED" : "FREE & EASY"} · {info.players}/{info.maxPlayers} players · {info.phase === "lobby" ? "waiting to start" : info.phase === "playing" ? "in progress" : "finished"}
             </p>
             {info.phase !== "lobby" && (
               <p className="small glow-pink">{info.mode === "free" && info.phase === "playing" ? "You can jump straight in!" : "You'll join as a spectator."}</p>

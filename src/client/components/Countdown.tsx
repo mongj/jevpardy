@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { TurnInfo } from "../../shared/protocol.ts";
 import { useAnimationNow } from "../lib/clock.ts";
 import { sfx } from "../lib/sfx.ts";
+import { Icon } from "./Pixel.tsx";
 
 const SEGMENTS = 20;
 
@@ -40,7 +41,7 @@ export function Countdown({ turn, offset, audible }: { turn: TurnInfo; offset: n
         ))}
       </div>
       <span className="countdown-num" style={{ color: colorFor(fraction) }}>
-        {running ? seconds : "❚❚"}
+        {running ? seconds : <Icon name="pause" />}
       </span>
     </div>
   );
