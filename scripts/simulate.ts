@@ -86,6 +86,11 @@ class Bot {
         break;
       case "error":
         this.errors.push(`${msg.code}: ${msg.message}`);
+        // A rejected-too-soon submit changes no state, so nothing else would prompt the bot to try again.
+        if (msg.code === "rate_limited") {
+          this.lastActedTurn = "";
+          setTimeout(() => this.maybeAct(), 700);
+        }
         break;
       case "typing":
       case "emote":
