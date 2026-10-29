@@ -1047,10 +1047,11 @@ input.code-input {
 .answer-form {
   display: flex;
   gap: 4px;
-  align-items: center;
+  align-items: stretch;
 }
+/* The button's dark outline is invisible on the page background, so its face has to fill the full input height. */
 .answer-form .px-btn {
-  margin-left: 8px;
+  margin: 0 0 0 8px;
 }
 input.answer-input {
   font-size: 26px;
