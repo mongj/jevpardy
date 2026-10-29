@@ -96,6 +96,8 @@ export interface RoomState {
   settings: GameSettings;
   judge: JudgeKind;
   maxPlayers: number;
+  /** The creator's token; whoever connects with it gets the host crown. */
+  hostToken: string | null;
   hostId: string | null;
   players: PlayerRecord[];
   kickedTokens: string[];
@@ -147,6 +149,7 @@ export interface CreateRoomOptions {
   settings?: Partial<GameSettings>;
   judge: JudgeKind;
   maxPlayers: number;
+  hostToken?: string;
 }
 
 export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): RoomState {
@@ -159,6 +162,7 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     settings,
     judge: opts.judge,
     maxPlayers: opts.maxPlayers,
+    hostToken: opts.hostToken ?? null,
     hostId: null,
     players: [],
     kickedTokens: [],
@@ -251,7 +255,10 @@ export function join(
   };
   state.players.push(player);
   if (player.role === "player" && state.phase === "playing") state.turnOrder.push(player.id);
-  if (!state.hostId) state.hostId = player.id;
+  if (!state.hostId || input.token === state.hostToken) {
+    if (state.hostId && state.hostId !== player.id) events.push({ type: "hostChanged", playerId: player.id });
+    state.hostId = player.id;
+  }
   state.emptySince = null;
   touch(state, ctx);
   events.push({ type: "playerJoined", playerId: player.id });

@@ -205,14 +205,13 @@ export interface CreateRoomRequest {
   topic: string;
   settings: Partial<GameSettings>;
   token: string;
-  name: string;
   /** Create even if Jev thinks the topic is hard to list examples of. */
   force?: boolean;
 }
 
 export type CreateRoomResponse =
   | { ok: true; code: string }
-  | { ok: false; error: "bad_topic" | "bad_name" | "bad_request"; message: string }
+  | { ok: false; error: "bad_topic" | "bad_request" | "unavailable"; message: string }
   | { ok: false; error: "topic_warning"; message: string; listability: number };
 
 export type RoomInfoResponse =
