@@ -1668,6 +1668,9 @@ input.answer-input:disabled {
   }
   .lobby .room-code-panel {
     grid-row: span 2;
+    align-self: start;
+    position: sticky;
+    top: 16px;
   }
   .lobby-cta {
     grid-column: 1 / -1;
