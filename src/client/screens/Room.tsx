@@ -3,7 +3,7 @@ import { tierById, tierIndex } from "../../shared/constants.ts";
 import type { Emote, GameEvent, PublicState } from "../../shared/protocol.ts";
 import { sanitizeName } from "../../shared/sanitize.ts";
 import { FxLayer, type FxHandle } from "../components/FxLayer.tsx";
-import { Icon, JevBot, type JevMood } from "../components/Pixel.tsx";
+import { EmoteArt, Icon, JevBot, type JevMood } from "../components/Pixel.tsx";
 import { MuteButton } from "../components/ui.tsx";
 import { getSavedName, saveName } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
@@ -223,7 +223,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
       <div className="emote-layer" aria-hidden="true">
         {emotes.map((e) => (
           <span key={e.id} className="floating-emote" style={{ left: `${e.x}%` }}>
-            {e.emote}
+            <EmoteArt emote={e.emote} size={44} />
             <small>{e.name}</small>
           </span>
         ))}

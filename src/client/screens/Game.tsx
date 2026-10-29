@@ -3,7 +3,7 @@ import { MAX_ANSWER_LENGTH } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
 import { AnswerWall } from "../components/AnswerWall.tsx";
 import { Countdown, Fuse } from "../components/Countdown.tsx";
-import { JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
+import { EMOTE_LABELS, EmoteArt, JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
 import { PlayerRail } from "../components/PlayerRail.tsx";
 import { Blink, PixelButton } from "../components/ui.tsx";
 
@@ -185,8 +185,8 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
 
       <div className="emote-bar" role="group" aria-label="Reactions">
         {EMOTES.map((e) => (
-          <button key={e} type="button" className="emote-btn" onClick={() => send({ type: "emote", emote: e })}>
-            {e}
+          <button key={e} type="button" className="emote-btn" onClick={() => send({ type: "emote", emote: e })} aria-label={EMOTE_LABELS[e]} title={EMOTE_LABELS[e]}>
+            <EmoteArt emote={e} />
           </button>
         ))}
         {isHost && (

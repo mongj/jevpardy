@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Emote } from "../../shared/protocol.ts";
 
 // X = body colour, o = white, k = near-black. Rows must be equal width.
 const SPRITES: readonly string[][] = [
@@ -184,6 +185,32 @@ export function Icon({ name }: { name: IconName }) {
   return (
     <svg className="px-icon" width={`${w / 8}em`} height="0.875em" viewBox={`0 0 ${w} 7`} shapeRendering="crispEdges" aria-hidden="true">
       {pixels(rows, { X: "currentColor" }).map((p) => (
+        <rect key={`${p.x}-${p.y}`} x={p.x} y={p.y} width={1.02} height={1.02} fill={p.fill} />
+      ))}
+    </svg>
+  );
+}
+
+// O/k = outline and features, Y/y = skin and shade, w = white, b = blue, r = red, o = orange.
+const EMOTE_PALETTE: Record<string, string> = { O: "#05040f", k: "#05040f", Y: "#ffd23f", y: "#d99a1e", w: "#ffffff", b: "#3ef0ff", r: "#ff4f6d", o: "#ff8a3d" };
+
+const EMOTE_ART: Record<Emote, readonly string[]> = {
+  clap: ["w..........w", ".w.O.O.O.Ow.", "..OYOYOYOYO.", "..OYOYOYOYO.", ".OYYYYOYYYYO", ".OYYYYOYYYYO", "..OYYYOYYYO.", "...OYYOYYO..", "....OYOYO...", ".....OOO...."],
+  lol: ["..OOOOOO..", ".OYYYYYYO.", "OYkYYYYkYO", "OkYkYYkYkO", "bYYYYYYYYb", "bYkkkkkkYb", "OYkrrrrkYO", "OYYkkkkYYO", ".OYYYYYYO.", "..OOOOOO.."],
+  fire: ["....r.....", "....rr....", "...rrr..r.", "..rroor.rr", ".rrooorrr.", ".rrooyorr.", "rrooyyyorr", "rroyyyyorr", ".rooyyyor.", "..rrrrrr.."],
+  shock: ["..OOOOOO..", ".ObbbbbbO.", "ObwwbbwwbO", "OYwkYYwkYO", "OYYYYYYYYO", "OYYYkkYYYO", "OYYkkkkYYO", "OYYkkkkYYO", ".OYYkkYYO.", "..OOOOOO.."],
+  hmm: ["..OOOOOO..", ".OYYYYYYO.", "OYkkYYYYYO", "OYYYYYkkYO", "OYkYYYYkYO", "OYYYYYYYYO", "OYYYYkkkYO", "OYYkkkYYYO", ".OYYYYYYO.", "..OOOOOO.."],
+  eyes: ["............", ".OOOO..OOOO.", "OwwwwOOwwwwO", "OwwwwOOwwwwO", "OwkkwOOwkkwO", "OwkkwOOwkkwO", "OwwwwOOwwwwO", "OwwwwOOwwwwO", ".OOOO..OOOO.", "............"],
+};
+
+export const EMOTE_LABELS: Record<Emote, string> = { clap: "Clap", lol: "Laugh", fire: "Fire", shock: "Shock", hmm: "Hmm", eyes: "Eyes" };
+
+export function EmoteArt({ emote, size = 28 }: { emote: Emote; size?: number }) {
+  const rows = EMOTE_ART[emote];
+  const w = rows[0]!.length;
+  return (
+    <svg className="emote-art" width={(size * w) / rows.length} height={size} viewBox={`0 0 ${w} ${rows.length}`} shapeRendering="crispEdges" aria-hidden="true">
+      {pixels(rows, EMOTE_PALETTE).map((p) => (
         <rect key={`${p.x}-${p.y}`} x={p.x} y={p.y} width={1.02} height={1.02} fill={p.fill} />
       ))}
     </svg>

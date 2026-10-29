@@ -157,8 +157,8 @@ export type GameEvent =
   | { type: "gameOver"; winnerId: string | null; reason: EndReason }
   | { type: "backToLobby" };
 
-export type Emote = "👏" | "😂" | "🔥" | "😱" | "🤔" | "👀";
-export const EMOTES: readonly Emote[] = ["👏", "😂", "🔥", "😱", "🤔", "👀"];
+export type Emote = "clap" | "lol" | "fire" | "shock" | "hmm" | "eyes";
+export const EMOTES: readonly Emote[] = ["clap", "lol", "fire", "shock", "hmm", "eyes"];
 
 export type ClientMessage =
   | { type: "hello"; token: string; name: string | null }
