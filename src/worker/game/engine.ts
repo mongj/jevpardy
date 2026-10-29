@@ -839,6 +839,9 @@ export function overrule(state: RoomState, actorId: string, verdictId: string, c
   if (!last || last.id !== verdictId || last.accepted || last.reason === "judge_error") {
     return fail("bad_message", "Only the latest rejection can be overruled.");
   }
+  if (last.reason === "duplicate" && state.answerKeys.includes(normalizeAnswer(last.text))) {
+    return fail("bad_message", "That exact answer is already on the board.");
+  }
   const player = findPlayer(state, last.playerId);
   if (!player) return fail("not_found", "Unknown player.");
   if (state.turn?.judging) return fail("already_judging", "Wait for Jev's verdict first.");

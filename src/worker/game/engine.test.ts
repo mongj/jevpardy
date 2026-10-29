@@ -302,3 +302,15 @@ describe("shared helpers", () => {
     });
   });
 });
+
+describe("overrule guard", () => {
+  it("refuses to overrule an exact repeat", () => {
+    const { state, ctx } = setup({ mode: "timed" });
+    start(state, state.hostId!, ctx);
+    answer(state, ctx, "Paris");
+    ctx.advance(1000);
+    answer(state, ctx, "paris");
+    const verdict = state.log[state.log.length - 1]!;
+    expect(overrule(state, state.hostId!, verdict.id, ctx)).toMatchObject({ ok: false });
+  });
+});
