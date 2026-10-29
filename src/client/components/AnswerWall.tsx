@@ -21,11 +21,10 @@ export function AnswerWall({ answers, players, highlightId }: { answers: Accepte
                 key={a.id}
                 className={`chip tier-${a.tier} ${a.id === highlightId ? "fresh" : ""}`}
                 style={{ ["--tier" as string]: tier.color, ["--who" as string]: who?.color ?? "#fff" }}
-                title={`${who?.name ?? "?"} · ${tier.name} · +${a.points}${a.typo ? " · typo forgiven" : ""}`}
+                title={`${who?.name ?? "?"} · ${tier.name} · +${a.points}`}
               >
                 <span className="chip-dot" aria-hidden="true" />
                 <span className="chip-text">{a.text}</span>
-                {a.typo && <span className="chip-typo" title="typo forgiven">~</span>}
                 {a.tier !== "basic" && a.tier !== "solid" && <span className="chip-tier">{tier.name}</span>}
               </li>
             );

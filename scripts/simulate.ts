@@ -144,7 +144,7 @@ function describe(e: GameEvent, s: PublicState): string | null {
     case "judging":
       return `    ? ${name(e.playerId)} says "${e.text}"`;
     case "accepted":
-      return `    ✔ "${e.answer.text}" ACCEPTED (${e.answer.tier}, +${e.answer.points}, p=${e.answer.confidence.toFixed(2)}${e.answer.typo ? ", typo" : ""})`;
+      return `    ✔ "${e.answer.text}" ACCEPTED (${e.answer.tier}, +${e.answer.points}, p=${e.answer.confidence.toFixed(2)})`;
     case "rejected":
       return `    ✘ "${e.verdict.text}" REJECTED: ${e.verdict.reason}${e.verdict.duplicateOf ? ` (dup of ${e.verdict.duplicateOf})` : ""} p=${e.verdict.confidence.toFixed(2)}`;
     case "lifeLost":

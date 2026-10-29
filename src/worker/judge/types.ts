@@ -18,8 +18,6 @@ export type JudgeOutput =
       ok: true;
       /** P(answer is a valid example of the topic, forgiving typos). */
       validity: number;
-      /** P(answer is spelled correctly). */
-      spelledCorrectly: number;
       /** Expected obscurity level, 0 (most common) .. TIERS.length-1. */
       obscurity: number;
       /** P(nothing valid is left to name once this answer is counted). */
@@ -49,6 +47,4 @@ export interface Thresholds {
   duplicate: number;
   /** At or above this P(exhausted) an accepted answer clears the board and ends the game. */
   exhausted: number;
-  /** Below this P(spelled correctly) an accepted answer is flagged as a forgiven typo. */
-  typo: number;
 }

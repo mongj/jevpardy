@@ -1167,9 +1167,6 @@ input.answer-input:disabled {
   font-size: 7px;
   color: var(--tier);
 }
-.chip-typo {
-  color: var(--dim);
-}
 .chip.tier-rare,
 .chip.tier-deepcut,
 .chip.tier-jevillion {

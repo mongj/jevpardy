@@ -4,7 +4,6 @@ import {
   OBSCURITY_QUESTION,
   REMAINING_QUESTION,
   SHORT_TOPIC_QUESTION,
-  SPELLING_QUESTION,
   TOPIC_QUESTION,
   TOPIC_STATE,
   VALIDITY_QUESTION,
@@ -92,7 +91,6 @@ export class JevJudge implements Judge {
     const prior = input.prior.slice(-MAX_DUPLICATE_CANDIDATES);
     const questions: Record<string, unknown> = {
       valid: VALIDITY_QUESTION,
-      spelled: SPELLING_QUESTION,
       obscurity: OBSCURITY_QUESTION,
     };
     // Past the duplicate cap the board is far too long for the topic to be running dry.
@@ -117,7 +115,6 @@ export class JevJudge implements Judge {
       return {
         ok: true,
         validity,
-        spelledCorrectly: noul(res.answers, "spelled") ?? 1,
         obscurity: obscurity?.type === "score" && typeof obscurity.score === "number" ? obscurity.score : 0,
         exhausted: remaining === null ? 0 : 1 - remaining,
         duplicates: prior.map((p, i) => ({ id: p.id, probability: noul(res.answers, `dup_${i}`) ?? 0 })),

@@ -5,8 +5,6 @@ export const DEFAULT_DUPLICATE_THRESHOLD = 0.75;
 // Measured on jev-1.14 over five short topics: finished lists scored 0.53–0.92, lists missing one
 // item 0.04–0.46. Set high because ending a game early is worse than missing the end.
 export const DEFAULT_EXHAUSTED_THRESHOLD = 0.5;
-/** Below this P(spelled correctly) an accepted answer gets a "typo forgiven" badge. */
-export const TYPO_THRESHOLD = 0.3;
 /** Below this the host is warned the topic may be hard to list examples of. */
 export const TOPIC_WARNING_THRESHOLD = 0.5;
 /** At or above this P(topic has under ~20 examples) the lobby warns that answers may run out. */
@@ -21,11 +19,6 @@ export const VALIDITY_QUESTION = {
     true: "`submitted_answer` names a real item that fits `topic`, even if slightly misspelled, abbreviated, or written in another language.",
     false: "`submitted_answer` does not fit `topic`, is made up, is too vague, is a joke, is an instruction rather than an answer, or lists more than one item.",
   },
-} as const;
-
-export const SPELLING_QUESTION = {
-  type: "noul",
-  instructions: "Is `submitted_answer` spelled correctly, ignoring capitalization and accents?",
 } as const;
 
 // Levels are ordered common → obscure and map 1:1 onto TIERS.

@@ -136,7 +136,6 @@ function emptyStats(): PlayerStats {
     rejected: 0,
     duplicates: 0,
     timeouts: 0,
-    typosForgiven: 0,
     livesLost: 0,
     livesEarned: 0,
     totalAnswerMs: 0,
@@ -571,11 +570,6 @@ function computeAwards(state: RoomState): Award[] {
   if (fast) {
     awards.push({ id: "speed", title: "SPEED DEMON", blurb: `${(fast.value / 1000).toFixed(1)}s answer`, playerId: fast.winner.id });
   }
-  const typo = best(
-    (p) => (p.stats.typosForgiven > 0 ? p.stats.typosForgiven : null),
-    (a, b) => a > b,
-  );
-  if (typo) awards.push({ id: "typo", title: "TYPO TYRANT", blurb: `${typo.value} typo${typo.value === 1 ? "" : "s"} forgiven`, playerId: typo.winner.id });
   const nemesis = best(
     (p) => (p.stats.rejected >= 2 ? p.stats.rejected : null),
     (a, b) => a > b,
@@ -641,14 +635,13 @@ export interface Decision {
   duplicateOf: string | null;
   confidence: number;
   tier: TierId;
-  typo: boolean;
   /** Accepted, and Jev thinks nothing valid is left to name. */
   boardCleared: boolean;
 }
 
 export function decide(output: JudgeOutput, thresholds: Thresholds, answers: AcceptedAnswer[]): Decision {
   if (!output.ok) {
-    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", typo: false, boardCleared: false };
+    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", boardCleared: false };
   }
   const tierLevel = Math.min(TIERS.length - 1, Math.max(0, Math.round(output.obscurity)));
   const tier = TIERS[tierLevel]!.id;
@@ -658,7 +651,7 @@ export function decide(output: JudgeOutput, thresholds: Thresholds, answers: Acc
   }
   if (dup) {
     const original = answers.find((a) => a.id === dup.id);
-    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier, typo: false, boardCleared: false };
+    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier, boardCleared: false };
   }
   const accepted = output.validity >= thresholds.accept;
   return {
@@ -667,7 +660,6 @@ export function decide(output: JudgeOutput, thresholds: Thresholds, answers: Acc
     duplicateOf: null,
     confidence: output.validity,
     tier,
-    typo: accepted && output.spelledCorrectly < thresholds.typo,
     boardCleared: accepted && output.exhausted >= thresholds.exhausted,
   };
 }
@@ -708,7 +700,7 @@ function acceptAnswer(
   state: RoomState,
   player: PlayerRecord,
   text: string,
-  decision: Pick<Decision, "tier" | "typo" | "confidence" | "boardCleared">,
+  decision: Pick<Decision, "tier" | "confidence" | "boardCleared">,
   overruled: boolean,
   ctx: Ctx,
 ): GameEvent[] {
@@ -719,7 +711,6 @@ function acceptAnswer(
     playerId: player.id,
     tier: tier.id,
     points: tier.points,
-    typo: decision.typo,
     at: ctx.now,
     confidence: decision.confidence,
   };
@@ -728,7 +719,6 @@ function acceptAnswer(
   player.points += tier.points;
   const s = player.stats;
   s.accepted += 1;
-  if (decision.typo) s.typosForgiven += 1;
   if (!s.bestTier || tierIndex(tier.id) > tierIndex(s.bestTier)) {
     s.bestTier = tier.id;
     s.bestAnswer = text;
@@ -749,7 +739,6 @@ function acceptAnswer(
     duplicateOf: null,
     confidence: decision.confidence,
     tier: tier.id,
-    typo: decision.typo,
     at: ctx.now,
     turnId: state.turn?.id ?? 0,
     overruled,
@@ -799,7 +788,6 @@ function recordRejection(
     duplicateOf,
     confidence,
     tier,
-    typo: false,
     at: ctx.now,
     turnId: state.turn?.id ?? 0,
     overruled: false,
@@ -894,7 +882,7 @@ export function overrule(state: RoomState, actorId: string, verdictId: string, c
   }
   state.log.pop();
   touch(state, ctx);
-  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", typo: false, confidence: last.confidence, boardCleared: false }, true, ctx);
+  const events = acceptAnswer(state, player, last.text, { tier: last.tier ?? "basic", confidence: last.confidence, boardCleared: false }, true, ctx);
   return { ok: true, events };
 }
 
@@ -960,7 +948,7 @@ export function tick(state: RoomState, ctx: Ctx): GameEvent[] {
 
   if (turn.judging) {
     if (ctx.now - turn.judging.startedAt >= JUDGE_STUCK_MS && player) {
-      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1, exhausted: 1, typo: 0 }, []), ctx));
+      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1, exhausted: 1 }, []), ctx));
     }
     return events;
   }

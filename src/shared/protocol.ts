@@ -33,7 +33,6 @@ export interface PlayerStats {
   rejected: number;
   duplicates: number;
   timeouts: number;
-  typosForgiven: number;
   livesLost: number;
   livesEarned: number;
   /** ms from turn start to accepted answer, summed (for averages). */
@@ -71,7 +70,6 @@ export interface AcceptedAnswer {
   playerId: string;
   tier: TierId;
   points: number;
-  typo: boolean;
   at: number;
   /** Raw Jev validity probability (0..1); shown as a confidence pip. */
   confidence: number;
@@ -100,7 +98,6 @@ export interface Verdict {
   duplicateOf: string | null;
   confidence: number;
   tier: TierId | null;
-  typo: boolean;
   at: number;
   turnId: number;
   overruled: boolean;
