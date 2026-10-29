@@ -95,6 +95,7 @@ export interface RoomState {
   phase: Phase;
   settings: GameSettings;
   judge: JudgeKind;
+  shortList: boolean | null;
   maxPlayers: number;
   /** The creator's token; whoever connects with it gets the host crown. */
   hostToken: string | null;
@@ -150,6 +151,7 @@ export interface CreateRoomOptions {
   judge: JudgeKind;
   maxPlayers: number;
   hostToken?: string;
+  shortList?: boolean | null;
 }
 
 export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): RoomState {
@@ -161,6 +163,7 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     phase: "lobby",
     settings,
     judge: opts.judge,
+    shortList: opts.shortList ?? null,
     maxPlayers: opts.maxPlayers,
     hostToken: opts.hostToken ?? null,
     hostId: null,
@@ -342,6 +345,19 @@ export function kick(state: RoomState, actorId: string, targetId: string, ctx: C
   return { ok: true, events };
 }
 
+function setTopic(state: RoomState, topic: string): void {
+  if (topic === state.topic) return;
+  state.topic = topic;
+  state.shortList = null;
+}
+
+/** Records Jev's short-list verdict, unless the topic changed again while it was being checked. */
+export function setShortList(state: RoomState, topic: string, shortList: boolean | null): boolean {
+  if (state.topic !== topic || state.shortList === shortList) return false;
+  state.shortList = shortList;
+  return true;
+}
+
 export function configure(
   state: RoomState,
   actorId: string,
@@ -354,7 +370,7 @@ export function configure(
   if (topic !== undefined) {
     const clean = sanitizeTopic(topic);
     if (!clean) return fail("bad_message", "Topic is too short.");
-    state.topic = clean;
+    setTopic(state, clean);
   }
   state.settings = mergeSettings(state.settings, patch);
   state.currentTurnSeconds = state.settings.turnSeconds;
@@ -875,7 +891,7 @@ export function rematch(state: RoomState, actorId: string, topic: string | undef
   if (topic !== undefined) {
     const clean = sanitizeTopic(topic);
     if (!clean) return fail("bad_message", "Topic is too short.");
-    state.topic = clean;
+    setTopic(state, clean);
   }
   state.players = state.players.filter((p) => p.connected);
   for (const p of state.players) {
@@ -1010,6 +1026,7 @@ export function toPublic(state: RoomState): PublicState {
     winnerId: state.winnerId,
     awards: state.awards,
     judge: state.judge,
+    shortList: state.shortList ?? null,
     expiresAt: expiresAt(state),
   };
 }

@@ -66,6 +66,11 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
         ) : (
           <p className="topic-big">{state.topic}</p>
         )}
+        {state.shortList && (
+          <p className="short-list small" role="note">
+            📏 SHORT LIST — Jev reckons this topic has under ~20 answers, so you could run out.
+          </p>
+        )}
         {isHost ? (
           <div className="lobby-settings">
             <ModePicker mode={state.settings.mode} onChange={(mode) => send({ type: "configure", settings: { mode } })} />

@@ -1,7 +1,7 @@
 import type { CreateRoomRequest, CreateRoomResponse, HealthResponse, RoomInfoResponse } from "../shared/protocol.ts";
 import { sanitizeTopic } from "../shared/sanitize.ts";
 import { createJudge } from "./judge/index.ts";
-import { TOPIC_WARNING_THRESHOLD } from "./judge/questions.ts";
+import { SHORT_TOPIC_THRESHOLD, TOPIC_WARNING_THRESHOLD } from "./judge/questions.ts";
 import { ROOM_CODE_PATTERN, log, randomRoomCode } from "./util.ts";
 
 export { GameRoom } from "./room.ts";
@@ -34,22 +34,21 @@ async function createRoomHandler(request: Request, env: Env): Promise<Response> 
   const topic = sanitizeTopic(body.topic);
   if (!topic) return json<CreateRoomResponse>({ ok: false, error: "bad_topic", message: "Give Jev a topic (3+ characters)." }, 400);
 
-  if (!body.force) {
-    const listability = await createJudge(env).checkTopic(topic);
-    if (listability !== null && listability < TOPIC_WARNING_THRESHOLD) {
-      return json<CreateRoomResponse>({
-        ok: false,
-        error: "topic_warning",
-        listability,
-        message: "Jev isn't sure players can name many examples of that. Play it anyway?",
-      });
-    }
+  const check = await createJudge(env).checkTopic(topic);
+  if (!body.force && check && check.listable < TOPIC_WARNING_THRESHOLD) {
+    return json<CreateRoomResponse>({
+      ok: false,
+      error: "topic_warning",
+      listability: check.listable,
+      message: "Jev isn't sure players can name many examples of that. Play it anyway?",
+    });
   }
+  const shortList = check ? check.short >= SHORT_TOPIC_THRESHOLD : null;
 
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
     const code = randomRoomCode();
     const stub = env.GAME_ROOM.getByName(code);
-    const created = await stub.create({ code, topic, settings: body.settings ?? {}, hostToken: body.token });
+    const created = await stub.create({ code, topic, settings: body.settings ?? {}, hostToken: body.token, shortList });
     if (created.ok) return json<CreateRoomResponse>({ ok: true, code });
   }
   log("error", "room.code_exhausted");

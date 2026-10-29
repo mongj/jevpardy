@@ -1,7 +1,9 @@
 import { TIERS } from "../../shared/constants.ts";
 import { normalizeAnswer } from "../../shared/sanitize.ts";
-import type { Judge, JudgeInput, JudgeOutput } from "./types.ts";
+import type { Judge, JudgeInput, JudgeOutput, TopicCheck } from "./types.ts";
 
+/** A topic like "planets (8)" tells the mock judge exactly how many answers exist. */
+const SIZED_TOPIC = /\((\d+)\)\s*$/;
 const NOPE_WORDS = /\b(wrong|nope|fake|bad|asdf|qwerty|lol)\b/i;
 
 function levenshtein(a: string, b: string): number {
@@ -27,6 +29,7 @@ function similarity(a: string, b: string): number {
  * Offline stand-in for Jev so the game is playable without an API key.
  * Accepts anything word-like except obvious junk ("wrong", "nope", no vowels),
  * flags near-identical spellings as duplicates and ranks longer answers as rarer.
+ * Topics ending in "(N)" are treated as having exactly N answers.
  */
 export class MockJudge implements Judge {
   readonly kind = "mock";
@@ -46,7 +49,9 @@ export class MockJudge implements Judge {
     };
   }
 
-  async checkTopic(): Promise<number | null> {
-    return null;
+  async checkTopic(topic: string): Promise<TopicCheck | null> {
+    const size = topic.match(SIZED_TOPIC);
+    if (!size) return null;
+    return { listable: 0.95, short: Number(size[1]) < 20 ? 0.95 : 0.05 };
   }
 }

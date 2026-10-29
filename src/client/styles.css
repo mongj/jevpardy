@@ -718,6 +718,13 @@ input.code-input {
   margin: 0 0 8px;
   line-height: 1.1;
 }
+.short-list {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  color: var(--yellow);
+  border: 2px dashed var(--yellow);
+  line-height: 1.4;
+}
 .join-form {
   display: flex;
   flex-direction: column;

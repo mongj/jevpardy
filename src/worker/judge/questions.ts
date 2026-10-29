@@ -6,6 +6,8 @@ export const DEFAULT_DUPLICATE_THRESHOLD = 0.75;
 export const TYPO_THRESHOLD = 0.3;
 /** Below this the host is warned the topic may be hard to list examples of. */
 export const TOPIC_WARNING_THRESHOLD = 0.5;
+/** At or above this P(topic has under ~20 examples) the lobby warns that answers may run out. */
+export const SHORT_TOPIC_THRESHOLD = 0.5;
 /** Most recent accepted answers checked by Jev for semantic duplicates (keeps requests well under context limits). */
 export const MAX_DUPLICATE_CANDIDATES = 400;
 
@@ -44,4 +46,5 @@ export const DUPLICATE_QUESTION =
 
 export const TOPIC_QUESTION =
   "Is `topic` a category with several distinct real examples that players could name one at a time?";
+export const SHORT_TOPIC_QUESTION = "Does `topic` have fewer than about 20 distinct real examples in total, so players could run out of answers?";
 export const TOPIC_STATE = { game: "players take turns naming examples of a topic" } as const;

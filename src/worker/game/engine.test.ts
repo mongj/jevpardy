@@ -7,6 +7,7 @@ import {
   type Ctx,
   type Decision,
   type RoomState,
+  configure,
   createRoom,
   decide,
   disconnect,
@@ -16,6 +17,7 @@ import {
   nextAlarmAt,
   overrule,
   resolve,
+  setShortList,
   start,
   submit,
   tapOut,
@@ -327,5 +329,19 @@ describe("room lifetime", () => {
     const lobby = setup({});
     for (const id of lobby.ids) disconnect(lobby.state, id, lobby.ctx);
     expect(nextAlarmAt(lobby.state)).toBe(lobby.ctx.now + EMPTY_ROOM_MS);
+  });
+});
+
+describe("short-list hint", () => {
+  it("clears when the topic changes and ignores stale checks", () => {
+    const { state, ctx } = setup({});
+    expect(setShortList(state, "European cities", true)).toBe(true);
+    expect(toPublic(state).shortList).toBe(true);
+    configure(state, state.hostId!, {}, "planets", ctx);
+    expect(state.shortList).toBeNull();
+    expect(setShortList(state, "European cities", true)).toBe(false);
+    expect(setShortList(state, "planets", true)).toBe(true);
+    configure(state, state.hostId!, {}, "planets", ctx);
+    expect(state.shortList).toBe(true);
   });
 });

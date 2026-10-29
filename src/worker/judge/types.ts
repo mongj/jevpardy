@@ -25,12 +25,19 @@ export type JudgeOutput =
     }
   | { ok: false; error: string };
 
+export interface TopicCheck {
+  /** P(topic is a category with several listable examples). */
+  listable: number;
+  /** P(topic has fewer than ~20 examples in total). */
+  short: number;
+}
+
 export interface Judge {
   readonly kind: JudgeKind;
   readonly model: string | null;
   judge(input: JudgeInput): Promise<JudgeOutput>;
-  /** P(topic is a category with many listable examples); null if unknown. */
-  checkTopic(topic: string): Promise<number | null>;
+  /** Null when the judge can't tell (mock judge, API failure). */
+  checkTopic(topic: string): Promise<TopicCheck | null>;
 }
 
 export interface Thresholds {

@@ -18,6 +18,7 @@ import {
   overrule,
   rematch,
   resolve,
+  setShortList,
   skip,
   start,
   submit,
@@ -28,6 +29,7 @@ import {
 } from "./game/engine.ts";
 import { MAX_ANSWER_LENGTH, MIN_TYPING_INTERVAL_MS } from "../shared/constants.ts";
 import { createJudge, thresholdsFromEnv } from "./judge/index.ts";
+import { SHORT_TOPIC_THRESHOLD } from "./judge/questions.ts";
 import type { Judge } from "./judge/types.ts";
 import { log, randomId } from "./util.ts";
 
@@ -44,6 +46,7 @@ export interface CreateOptions {
   topic: string;
   settings: Partial<GameSettings>;
   hostToken: string;
+  shortList: boolean | null;
 }
 
 export class GameRoom extends DurableObject<Env> {
@@ -83,7 +86,7 @@ export class GameRoom extends DurableObject<Env> {
     if (this.room) await this.wipe();
     const maxPlayers = Number(this.env.MAX_PLAYERS) || 12;
     this.room = createRoom(
-      { code: opts.code, topic: opts.topic, settings: opts.settings, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken },
+      { code: opts.code, topic: opts.topic, settings: opts.settings, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken, shortList: opts.shortList },
       { now: Date.now() },
     );
     await this.persist();
@@ -140,8 +143,11 @@ export class GameRoom extends DurableObject<Env> {
     switch (msg.type) {
       case "start":
         return this.apply(ws, start(room, playerId, ctx));
-      case "configure":
-        return this.apply(ws, configure(room, playerId, msg.settings ?? {}, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
+      case "configure": {
+        const before = room.topic;
+        await this.apply(ws, configure(room, playerId, msg.settings ?? {}, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
+        return this.recheckTopic(before);
+      }
       case "submit":
         return this.onSubmit(ws, room, playerId, typeof msg.text === "string" ? msg.text : "");
       case "typing":
@@ -160,8 +166,11 @@ export class GameRoom extends DurableObject<Env> {
         return this.apply(ws, overrule(room, playerId, typeof msg.verdictId === "string" ? msg.verdictId : "", ctx));
       case "end":
         return this.apply(ws, end(room, playerId, ctx));
-      case "rematch":
-        return this.apply(ws, rematch(room, playerId, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
+      case "rematch": {
+        const before = room.topic;
+        await this.apply(ws, rematch(room, playerId, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
+        return this.recheckTopic(before);
+      }
       case "becomePlayer":
         return this.apply(ws, becomePlayer(room, playerId, ctx));
       case "emote":
@@ -215,6 +224,15 @@ export class GameRoom extends DurableObject<Env> {
       ...(output.ok ? {} : { error: output.error }),
     });
     await this.commit(resolve(current, result.turnId, decision, this.ctxNow()));
+  }
+
+  /** After the host changes the topic, ask Jev again whether it's a short list. */
+  private async recheckTopic(previousTopic: string): Promise<void> {
+    const topic = this.room?.topic;
+    if (!topic || topic === previousTopic) return;
+    const check = await this.judge.checkTopic(topic);
+    const room = this.room;
+    if (room && setShortList(room, topic, check ? check.short >= SHORT_TOPIC_THRESHOLD : null)) await this.commit([]);
   }
 
   private onTyping(room: RoomState, playerId: string, text: string): void {

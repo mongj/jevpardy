@@ -128,6 +128,8 @@ export interface PublicState {
   winnerId: string | null;
   awards: Award[];
   judge: JudgeKind;
+  /** Jev thinks the topic has under ~20 answers, so the board may run dry. Null until checked. */
+  shortList: boolean | null;
   /** Epoch ms when the room will be wiped if nothing happens. */
   expiresAt: number;
 }

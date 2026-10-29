@@ -2,12 +2,13 @@ import {
   DUPLICATE_QUESTION,
   MAX_DUPLICATE_CANDIDATES,
   OBSCURITY_QUESTION,
+  SHORT_TOPIC_QUESTION,
   SPELLING_QUESTION,
   TOPIC_QUESTION,
   TOPIC_STATE,
   VALIDITY_QUESTION,
 } from "./questions.ts";
-import type { Judge, JudgeInput, JudgeOutput } from "./types.ts";
+import type { Judge, JudgeInput, JudgeOutput, TopicCheck } from "./types.ts";
 
 const DEFAULT_API_URL = "https://api.typesafe.ai";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -114,10 +115,19 @@ export class JevJudge implements Judge {
     }
   }
 
-  async checkTopic(topic: string): Promise<number | null> {
+  async checkTopic(topic: string): Promise<TopicCheck | null> {
     try {
-      const res = await this.systemOne(TOPIC_STATE, { listable: { type: "noul", instructions: { topic, question: TOPIC_QUESTION } } }, "topic");
-      return noul(res.answers, "listable");
+      const res = await this.systemOne(
+        TOPIC_STATE,
+        {
+          listable: { type: "noul", instructions: { topic, question: TOPIC_QUESTION } },
+          short: { type: "noul", instructions: { topic, question: SHORT_TOPIC_QUESTION } },
+        },
+        "topic",
+      );
+      const listable = noul(res.answers, "listable");
+      const short = noul(res.answers, "short");
+      return listable === null || short === null ? null : { listable, short };
     } catch {
       return null;
     }

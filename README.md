@@ -87,7 +87,10 @@ The response is `{ model, answers: { valid: { type: "noul", noul: 0.92 }, obscur
 3. Otherwise, if `valid ≥ ACCEPT_THRESHOLD` (0.7), it's **accepted**. `round(obscurity)` picks the rarity tier, and `spelled < 0.3` adds a "typo forgiven" badge.
 4. If Jev errors after retries (429/5xx with backoff, 8 s timeout), the verdict is a no-penalty *"Jev glitched, try again"*.
 
-When the room is created, a separate Noul checks whether the topic is "a category with several distinct real examples". Below 0.5, the host is warned and can *play anyway*.
+When the room is created (and whenever the host changes the topic), one more request asks two Nouls about the topic:
+
+- **Listable:** "is `topic` a category with several distinct real examples?" Below 0.5, the host is warned and can *play anyway*.
+- **Short list:** "does `topic` have fewer than about 20 distinct real examples?" At 0.5 or above, the lobby shows a *SHORT LIST* notice so players know the answers could run out. Measured: planets 0.92, days of the week 0.93, Beatles members 0.89, Harry Potter books 0.85; US states 0.08, dog breeds 0.04, cities in continental Europe 0.03.
 
 All questions and thresholds live in [`src/worker/judge/questions.ts`](src/worker/judge/questions.ts), so they're easy to review and tune.
 
@@ -101,6 +104,7 @@ With no `TYPESAFE_API_KEY` (or `JUDGE_MODE=mock`), the game uses an offline mock
 - flags near-identical spellings (≥ 80% Levenshtein similarity) as repeats;
 - ranks longer answers as rarer;
 - treats an answer containing `~` as a forgiven typo.
+- treats a topic ending in `(N)`, such as `planets (8)`, as having exactly N answers. That's a short list when N < 20.
 
 ---
 
