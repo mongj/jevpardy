@@ -61,9 +61,9 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
       <div className="podium">
         {winner ? (
           <>
-            <div className="winner-sprite">
+            <div className="winner-sprite bob">
               <Crown size={36} />
-              <Sprite avatar={winner.avatar} color={winner.color} size={96} className="bob" />
+              <Sprite avatar={winner.avatar} color={winner.color} size={96} />
             </div>
             <p className="winner-name" style={{ color: winner.color }}>
               {winner.id === meId ? "YOU WIN!" : `${winner.name} WINS!`}
