@@ -1,4 +1,4 @@
-import "@fontsource/press-start-2p/400.css";
+import "./fonts.css";
 import "@fontsource/vt323/400.css";
 import "./styles.css";
 import { StrictMode } from "react";
