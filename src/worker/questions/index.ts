@@ -2,9 +2,10 @@ import { MockGenerator } from "./mock.ts";
 import { OpenAIGenerator, OpenAIReviewer } from "./openai.ts";
 import type { QuestionGenerator, QuestionReviewer } from "./types.ts";
 
-export const DEFAULT_WRITER_MODEL = "gpt-5.4-mini";
+// Picked by scripts/bench-questions.ts; see the README for the numbers.
+export const DEFAULT_WRITER_MODEL = "gpt-6-sol";
 export const DEFAULT_WRITER_EFFORT = "low";
-export const DEFAULT_REVIEWER_MODEL = "gpt-5.4-mini";
+export const DEFAULT_REVIEWER_MODEL = "gpt-6-sol";
 export const DEFAULT_REVIEWER_EFFORT = "low";
 
 const NO_REVIEWER: QuestionReviewer = { model: null, review: async () => null };

@@ -21,10 +21,10 @@
     "MAX_PLAYERS": "12",
     // Question writer. "auto" uses OpenAI when OPENAI_API_KEY is set, otherwise the mock writer. "mock" forces the mock.
     "GENERATOR_MODE": "auto",
-    "OPENAI_MODEL": "gpt-5.4-mini",
+    "OPENAI_MODEL": "gpt-6-sol",
     "OPENAI_REASONING_EFFORT": "low",
     // Second pass that cuts dud questions with the rubric in src/worker/questions/prompt.ts.
-    "REVIEWER_MODEL": "gpt-5.4-mini",
+    "REVIEWER_MODEL": "gpt-6-sol",
     "REVIEWER_REASONING_EFFORT": "low"
   },
   "observability": {
