@@ -1,14 +1,9 @@
 // Every Jev question and threshold lives here so they're easy to review and tune.
+// `topic` holds the current question ("Name a Pixar movie"); measured on jev-1.14 that phrasing judges
+// answers to a "Name a …" question as well as it judged bare topics.
 
 export const DEFAULT_ACCEPT_THRESHOLD = 0.7;
 export const DEFAULT_DUPLICATE_THRESHOLD = 0.75;
-// Measured on jev-1.14 over five short topics: finished lists scored 0.53–0.92, lists missing one
-// item 0.04–0.46. Set high because ending a game early is worse than missing the end.
-export const DEFAULT_EXHAUSTED_THRESHOLD = 0.5;
-/** Below this the host is warned the topic may be hard to list examples of. */
-export const TOPIC_WARNING_THRESHOLD = 0.5;
-/** At or above this P(topic has under ~20 examples) the lobby warns that answers may run out. */
-export const SHORT_TOPIC_THRESHOLD = 0.5;
 /** Most recent accepted answers checked by Jev for semantic duplicates (keeps requests well under context limits). */
 export const MAX_DUPLICATE_CANDIDATES = 400;
 
@@ -40,15 +35,11 @@ export const OBSCURITY_QUESTION = {
 export const DUPLICATE_QUESTION =
   "Do `submitted_answer` and `previous_answer` refer to the same thing, allowing for misspellings, translations, abbreviations, or alternative names?";
 
-/**
- * Asked with every judgment, alongside the answers already on the board. Phrased as "is anything left?"
- * (and inverted) because Jev separates finished and unfinished lists more sharply that way than when
- * asked "is the list complete?".
- */
-export const REMAINING_QUESTION =
-  "Is there still at least one real example of `topic` that appears in neither `accepted_answers` nor `submitted_answer`?";
-
-export const TOPIC_QUESTION =
+// Vetting freshly written questions, all in one request. Measured on jev-1.14: "short" is the useful
+// signal (Santa's reindeer 0.78, tooth types 0.80, Taylor Swift tours 0.71 vs. pasta shapes 0.16,
+// Taylor Swift songs 0.05); "listable" and the writer's own examples catch broken questions.
+export const LISTABLE_QUESTION =
   "Is `topic` a category with several distinct real examples that players could name one at a time?";
-export const SHORT_TOPIC_QUESTION = "Does `topic` have fewer than about 20 distinct real examples in total, so players could run out of answers?";
-export const TOPIC_STATE = { game: "players take turns naming examples of a topic" } as const;
+export const SHORT_QUESTION = "Does `topic` have fewer than about 20 distinct real examples in total, so players could run out of answers?";
+export const EXAMPLE_QUESTION = "Allowing for minor misspellings, is `submitted_answer` a genuine example of `topic`?";
+export const VETTING_STATE = { game: "players take turns naming examples of a topic" } as const;

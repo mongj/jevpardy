@@ -6,11 +6,11 @@ export interface PriorAnswer {
 }
 
 export interface JudgeInput {
-  topic: string;
+  /** The question being answered, e.g. "Name a Pixar movie". */
+  question: string;
   answer: string;
+  /** Answers already accepted for this question. */
   prior: PriorAnswer[];
-  /** Ask whether this answer leaves nothing to name (short-list topics only). */
-  askExhausted: boolean;
 }
 
 export type JudgeOutput =
@@ -20,31 +20,34 @@ export type JudgeOutput =
       validity: number;
       /** Expected obscurity level, 0 (most common) .. TIERS.length-1. */
       obscurity: number;
-      /** P(nothing valid is left to name once this answer is counted). */
-      exhausted: number;
       /** P(answer names the same thing as each prior answer). */
       duplicates: { id: string; probability: number }[];
     }
   | { ok: false; error: string };
 
-export interface TopicCheck {
-  /** P(topic is a category with several listable examples). */
+export interface QuestionToVet {
+  text: string;
+  examples: string[];
+}
+
+export interface Vetting {
+  /** P(the question is a category players can name examples of one at a time). */
   listable: number;
-  /** P(topic has fewer than ~20 examples in total). */
+  /** P(it has fewer than ~20 answers in total). */
   short: number;
+  /** Mean P(each of the writer's examples is a valid answer); null without examples. */
+  examples: number | null;
 }
 
 export interface Judge {
   readonly kind: JudgeKind;
   readonly model: string | null;
   judge(input: JudgeInput): Promise<JudgeOutput>;
-  /** Null when the judge can't tell (mock judge, API failure). */
-  checkTopic(topic: string): Promise<TopicCheck | null>;
+  /** Checks freshly written questions in one go. Null when the judge can't tell (mock judge, API failure). */
+  vetQuestions(questions: QuestionToVet[]): Promise<Vetting[] | null>;
 }
 
 export interface Thresholds {
   accept: number;
   duplicate: number;
-  /** At or above this P(exhausted) an accepted answer clears the board and ends the game. */
-  exhausted: number;
 }

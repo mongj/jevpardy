@@ -1,5 +1,7 @@
 // Drives full games against a running server with bot players over WebSocket.
-//   node scripts/simulate.ts [--url http://localhost:5173] [--mode timed|free|cleared|all] [--topic "..."]
+//   node scripts/simulate.ts [--url http://localhost:5173] [--mode timed|deck|all]
+// Bots can't know what Jev's secret questions will be, so run the server with the mock judge and writer:
+//   JUDGE_MODE=mock GENERATOR_MODE=mock CLOUDFLARE_INCLUDE_PROCESS_ENV=true yarn dev
 
 import { parseArgs } from "node:util";
 import type { ClientMessage, CreateRoomResponse, GameEvent, HealthResponse, PublicState, ServerMessage } from "../src/shared/protocol.ts";
@@ -8,7 +10,6 @@ const { values } = parseArgs({
   options: {
     url: { type: "string", default: "http://localhost:5173" },
     mode: { type: "string", default: "all" },
-    topic: { type: "string", default: "cities in continental Europe" },
     quiet: { type: "boolean", default: false },
   },
 });
@@ -111,16 +112,16 @@ class Bot {
     const key = `${turn.id}:${turn.attempts}`;
     if (this.lastActedTurn === key) return;
     this.lastActedTurn = key;
-    const used = new Set(s.answers.map((a) => a.text.toLowerCase()));
+    const onThisQuestion = s.answers.filter((a) => a.question === s.question?.index);
+    const used = new Set(onThisQuestion.map((a) => a.text.toLowerCase()));
     const fresh = this.opts.pool.find((a) => !used.has(a.toLowerCase()));
     let text: string | null = fresh ?? null;
     if (this.opts.strategy === "sleepy") text = null;
     if (this.opts.strategy === "sloppy") {
-      // Cycle: a duplicate, a wrong answer, a semantic duplicate, then a real one.
-      const step = this.sloppyStep++ % 4;
-      if (step === 0 && s.answers.length > 0) text = s.answers[0]!.text.toUpperCase();
+      // Cycle: a duplicate, a wrong answer, then a real one.
+      const step = this.sloppyStep++ % 3;
+      if (step === 0 && onThisQuestion.length > 0) text = onThisQuestion[0]!.text.toUpperCase();
       else if (step === 1) text = "wrong answer lol";
-      else if (step === 2 && s.answers.some((a) => a.text === "Munich")) text = "München";
     }
     if (!text) return;
     const typed = text;
@@ -146,6 +147,8 @@ function describe(e: GameEvent, s: PublicState): string | null {
       return "▶ GAME START";
     case "turnStarted":
       return `  → turn ${e.turnId}: ${name(e.playerId)}`;
+    case "questionStarted":
+      return `◆ Q${e.index + 1} (${e.why}): ${s.question?.text ?? "?"}`;
     case "judging":
       return `    ? ${name(e.playerId)} says "${e.text}"`;
     case "accepted":
@@ -158,8 +161,6 @@ function describe(e: GameEvent, s: PublicState): string | null {
       return `    ♥+ ${name(e.playerId)} earned a 1UP → ${e.lives}`;
     case "eliminated":
       return `    ☠ ${name(e.playerId)} ELIMINATED`;
-    case "tappedOut":
-      return `    ✋ ${name(e.playerId)} tapped out`;
     case "skipped":
       return `    ⏭ ${name(e.playerId)} skipped`;
     case "speedUp":
@@ -175,11 +176,11 @@ function describe(e: GameEvent, s: PublicState): string | null {
   }
 }
 
-async function createRoom(settings: Record<string, unknown>, hostToken: string, topic = values.topic!): Promise<string> {
+async function createRoom(settings: Record<string, unknown>, hostToken: string, topics = ["European cities", "famous rivers"]): Promise<string> {
   const res = await fetch(`${BASE}/api/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic, settings, token: hostToken, force: true }),
+    body: JSON.stringify({ topics, settings, token: hostToken }),
   });
   const body = (await res.json()) as CreateRoomResponse;
   if (!body.ok) throw new Error(`create failed: ${body.message}`);
@@ -193,6 +194,16 @@ function check(label: string, ok: boolean, failures: string[]): void {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Polls a bot's view until `ok` holds (the deck is written in the background). */
+async function until(bot: Bot, ok: (s: PublicState) => boolean, ms = 20_000): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (bot.state && ok(bot.state)) return true;
+    await wait(100);
+  }
+  return false;
 }
 
 function attachLogger(observer: Bot): void {
@@ -210,9 +221,9 @@ function attachLogger(observer: Bot): void {
 }
 
 async function runTimed(): Promise<string[]> {
-  console.log("\n\x1b[1m=== TIMED MODE (3 bots, 2 lives, 6s turns, wrong answers retry) ===\x1b[0m");
+  console.log("\n\x1b[1m=== TIMED MODE (3 bots, 2 lives, 6s turns, 5 questions × 2 rounds) ===\x1b[0m");
   const host = new Bot("", { name: "AceBot", strategy: "ace", pool: GOOD });
-  const code = await createRoom({ mode: "timed", lives: 2, turnSeconds: 6, wrongAnswer: "retry" }, host.token);
+  const code = await createRoom({ lives: 2, turnSeconds: 6, mysteryFuse: false, wrongAnswer: "retry", questionCount: 5, roundsPerQuestion: 2 }, host.token);
   console.log(`room ${code} — ${BASE}/r/${code}`);
   host.code = code;
   const bots = [
@@ -224,6 +235,8 @@ async function runTimed(): Promise<string[]> {
   attachLogger(bots[0]!);
   const failures: string[] = [];
   check("first joiner with creator token is host", bots[0]!.state!.hostId === bots[0]!.id, failures);
+  check("deck gets written", await until(bots[0]!, (s) => s.deck.status === "ready" && s.deck.ready === 5), failures);
+  check("lobby never shows the questions", !JSON.stringify(bots[1]!.state).includes("Name "), failures);
   bots[1]!.send({ type: "start" });
   await wait(300);
   check("non-host cannot start", bots[1]!.errors.some((e) => e.startsWith("not_host")), failures);
@@ -248,11 +261,15 @@ async function runTimed(): Promise<string[]> {
   }
   const events = bots[0]!.events;
   const sleepy = final.players.find((p) => p.name === "SleepyBot")!;
-  check("game ended with the last one standing", final.phase === "over" && final.endReason === "lastStanding", failures);
+  const swaps = events.filter((e) => e.type === "questionStarted");
+  check("game ended (last one standing or deck spent)", final.phase === "over" && (final.endReason === "lastStanding" || final.endReason === "questionsDone"), failures);
   check("sleepy bot timed out and was eliminated", sleepy.status === "eliminated" && sleepy.stats.timeouts === 2, failures);
+  check("a question stumped someone and moved on", swaps.some((e) => e.type === "questionStarted" && e.why === "stumped"), failures);
+  check("a question ran its rounds and moved on", swaps.some((e) => e.type === "questionStarted" && e.why === "rounds"), failures);
   check("an exact duplicate was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "duplicate"), failures);
   check("a wrong answer was rejected", events.some((e) => e.type === "rejected" && e.verdict.reason === "invalid"), failures);
   check("answers were accepted", final.answers.length >= 3, failures);
+  check("all questions are revealed at the end", final.history.length === 5, failures);
   check("winner has place 1", final.players.find((p) => p.id === final.winnerId)?.place === 1, failures);
   check("awards were computed", final.awards.length > 0, failures);
   printSummary(final);
@@ -260,78 +277,34 @@ async function runTimed(): Promise<string[]> {
   return failures;
 }
 
-async function runFree(): Promise<string[]> {
-  console.log("\n\x1b[1m=== FREE & EASY MODE (2 bots + late joiner, tap out) ===\x1b[0m");
-  const host = new Bot("", { name: "Hosty", strategy: "ace", pool: GOOD.slice(0, 4) });
-  const code = await createRoom({ mode: "free" }, host.token);
+async function runDeck(): Promise<string[]> {
+  // The mock writer reads "(N)" as "only N questions exist"; "(0)" is unusable.
+  console.log("\n\x1b[1m=== DECK (topic warnings, suggestions, secrecy) ===\x1b[0m");
+  const host = new Bot("", { name: "Quizzy", strategy: "ace", pool: GOOD });
+  const code = await createRoom({ mode: "timed", questionCount: 6 }, host.token, ["my cat (0)", "dogs (2)", "space"]);
   console.log(`room ${code} — ${BASE}/r/${code}`);
   host.code = code;
-  const guest = new Bot(code, { name: "Guesty", strategy: "sloppy", pool: GOOD.slice(10, 14) });
   await host.connect();
-  await guest.connect();
-  attachLogger(host);
   const failures: string[] = [];
+  check("deck gets written", await until(host, (s) => s.deck.status === "ready"), failures);
+  const reports = host.state!.deck.reports;
+  check("unusable topic is flagged with a suggestion", reports[0]?.status === "unusable" && !!reports[0].suggestion, failures);
+  check("thin topic is flagged", reports[1]?.status === "thin" && reports[1].got === 2, failures);
+  check("other topics fill the gap", reports[2]?.status === "ok" && host.state!.deck.ready === 6, failures);
+  const suggestion = reports[0]!.suggestion!;
+  host.send({ type: "configure", settings: {}, topics: [suggestion, "dogs (2)", "space"] });
+  check("taking the suggestion rewrites the deck", await until(host, (s) => s.topics[0] === suggestion && s.deck.status === "ready" && s.deck.reports[0]?.status === "ok"), failures);
   host.send({ type: "start" });
-  await wait(1_500);
-  const late = new Bot(code, { name: "Latecomer", strategy: "ace", pool: GOOD.slice(20) });
-  await late.connect();
-  check("late joiner is a player in free mode", late.state!.players.find((p) => p.id === late.id)?.role === "player", failures);
-  check("free mode has no deadline", host.state!.turn?.deadline === null, failures);
-
-  // Each bot taps out once its pool runs dry.
-  const tapper = setInterval(() => {
-    for (const b of [host, guest, late]) {
-      const s = b.state;
-      if (!s || s.phase !== "playing") continue;
-      const me = s.players.find((p) => p.id === b.id);
-      const used = new Set(s.answers.map((a) => a.text.toLowerCase()));
-      if (me?.status === "alive" && s.turn?.playerId === b.id && !s.turn.judging && b.opts.pool.every((a) => used.has(a.toLowerCase()))) {
-        b.send({ type: "tapOut" });
-      }
-    }
-  }, 700);
-  const final = await Promise.race([host.done, wait(120_000).then(() => null)]);
-  clearInterval(tapper);
-  if (!final) {
-    failures.push("free game did not finish within 120s");
-    return failures;
-  }
-  check("game ended when everyone tapped out", final.players.filter((p) => p.role === "player").every((p) => p.status === "tappedOut"), failures);
-  check("all pools were used", final.answers.length >= 10, failures);
-  check("nobody lost lives", final.players.every((p) => p.stats.livesLost === 0), failures);
-  printSummary(final);
-  for (const b of [host, guest, late]) b.ws.close();
-  return failures;
-}
-
-const PLANETS = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
-
-async function runCleared(): Promise<string[]> {
-  // Against the real Jev the topic is a genuine short list; the mock judge reads the size from "(8)".
-  const topic = health.judge === "mock" ? "planets in the solar system (8)" : "planets in the solar system";
-  console.log(`\n\x1b[1m=== BOARD CLEARED (2 bots, timed, "${topic}") ===\x1b[0m`);
-  const host = new Bot("", { name: "Astro", strategy: "ace", pool: PLANETS.filter((_, i) => i % 2 === 0) });
-  const code = await createRoom({ mode: "timed", lives: 3, turnSeconds: 15 }, host.token, topic);
-  console.log(`room ${code} — ${BASE}/r/${code}`);
-  host.code = code;
-  const guest = new Bot(code, { name: "Nova", strategy: "ace", pool: PLANETS.filter((_, i) => i % 2 === 1) });
-  await host.connect();
-  await guest.connect();
-  attachLogger(host);
-  const failures: string[] = [];
-  check("lobby flags the topic as a short list", host.state!.shortList === true, failures);
-  host.send({ type: "start" });
-  const final = await Promise.race([host.done, wait(90_000).then(() => null)]);
-  if (!final) {
-    failures.push("cleared game did not finish within 90s");
-    return failures;
-  }
-  check("game ended because the board was cleared", final.endReason === "cleared", failures);
-  check("all eight planets were named", final.answers.length === PLANETS.length, failures);
-  check("nobody was knocked out", final.players.every((p) => p.status === "alive"), failures);
-  check("the closer got the FINAL ANSWER award", final.awards.find((a) => a.id === "closer")?.playerId === final.answers.at(-1)?.playerId, failures);
-  printSummary(final);
-  for (const b of [host, guest]) b.ws.close();
+  check("game starts", await until(host, (s) => s.phase === "playing"), failures);
+  host.paused = true;
+  check("only the first question is revealed", host.state!.question?.index === 0, failures);
+  const midGame = JSON.stringify(host.state);
+  host.send({ type: "end" });
+  const final = await Promise.race([host.done, wait(10_000).then(() => null)]);
+  const unplayed = final?.history.filter((h) => !h.played) ?? [];
+  check("host can end the game; the rest of the deck is revealed", final?.history.length === 6 && unplayed.length === 5, failures);
+  check("unplayed questions never reached clients mid-game", unplayed.every((h) => !midGame.includes(h.text)), failures);
+  host.ws.close();
   return failures;
 }
 
@@ -341,15 +314,22 @@ function printSummary(s: PublicState): void {
     console.log(`   #${p.place} ${p.name.padEnd(10)} ${String(p.points).padStart(4)} pts  ${p.stats.accepted} ok / ${p.stats.rejected} bounced  ${p.status}`);
   }
   console.log(`  AWARDS: ${s.awards.map((a) => `${a.title} → ${s.players.find((p) => p.id === a.playerId)?.name}`).join(", ")}`);
-  console.log(`  ANSWERS: ${s.answers.map((a) => a.text).join(", ")}\n`);
+  for (const h of s.history) {
+    const found = s.answers.filter((a) => a.question === h.index).map((a) => a.text);
+    console.log(`  Q${h.index + 1} ${h.played ? `[${h.endedBy ?? "ended"}]` : "[never reached]"} ${h.text}${found.length ? ` → ${found.join(", ")}` : ""}`);
+  }
+  console.log("");
 }
 
 const health = (await fetch(`${BASE}/api/health`).then((r) => r.json())) as HealthResponse;
-console.log(`server ${BASE} judge=${JSON.stringify(health)}`);
+console.log(`server ${BASE} ${JSON.stringify(health)}`);
+if (health.judge !== "mock" || health.generator !== "mock") {
+  console.log("\x1b[31mThe simulator needs the mock judge and writer (bots can't know Jev's secret questions). Start the server with:\n  JUDGE_MODE=mock GENERATOR_MODE=mock CLOUDFLARE_INCLUDE_PROCESS_ENV=true yarn dev\x1b[0m");
+  process.exit(1);
+}
 const failures: string[] = [];
 if (values.mode === "timed" || values.mode === "all") failures.push(...(await runTimed()));
-if (values.mode === "free" || values.mode === "all") failures.push(...(await runFree()));
-if (values.mode === "cleared" || values.mode === "all") failures.push(...(await runCleared()));
+if (values.mode === "deck" || values.mode === "all") failures.push(...(await runDeck()));
 if (failures.length > 0) {
   console.log(`\x1b[31m${failures.length} check(s) failed:\n - ${failures.join("\n - ")}${reset}`);
   process.exit(1);

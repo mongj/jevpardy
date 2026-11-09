@@ -1,32 +1,92 @@
 // WebSocket + HTTP protocol shared by the Worker and the browser client.
 
-export type GameMode = "timed" | "free";
 export type Phase = "lobby" | "playing" | "over";
 export type WrongAnswerRule = "retry" | "life";
 
 export interface GameSettings {
-  mode: GameMode;
-  /** Timed mode: starting lives per player. */
+  /** Starting lives per player. */
   lives: number;
-  /** Timed mode: seconds per turn (or the average fuse when `mysteryFuse`). */
+  /** Seconds per turn (or the average fuse when `mysteryFuse`). */
   turnSeconds: number;
-  /** Timed mode: what a rejected answer costs. "retry" keeps the clock running; "life" costs a heart and passes the turn. */
+  /** What a rejected answer costs. "retry" keeps the clock running; "life" costs a heart and passes the turn. */
   wrongAnswer: WrongAnswerRule;
-  /** Timed mode: hide the clock and pop at a random moment (Puffer Party style). */
+  /** One hidden fuse shared by the table that carries over when you pass it on (Puffer Party style). */
   mysteryFuse: boolean;
-  /** Timed mode: shave time off the turn clock after every full lap. */
+  /** Shave time off the turn clock after every full lap. */
   speedUp: boolean;
+  /** How many questions the deck holds. */
+  questionCount: number;
+  /** A question moves on after this many trips round the table, at the latest. */
+  roundsPerQuestion: number;
 }
 
-/** lastStanding: one timed player left; allOut: everyone eliminated or tapped out; cleared: Jev says nothing is left to name. */
-export type EndReason = "lastStanding" | "allOut" | "host" | "cleared";
+/** lastStanding: one player left; allOut: everyone eliminated; questionsDone: the deck ran out. */
+export type EndReason = "lastStanding" | "allOut" | "host" | "questionsDone";
+
+/**
+ * Why a question was retired.
+ * cleared: it took its full share of answers. rounds: it went round the table `roundsPerQuestion` times.
+ * stumped: it beat too many players, or was about to come back to someone it already beat.
+ */
+export type QuestionEndReason = "cleared" | "rounds" | "stumped";
+
+/** The question being played right now. Future questions never leave the server. */
+export interface PublicQuestion {
+  /** 0-based position in the deck. */
+  index: number;
+  text: string;
+  topic: string;
+  /** Answers it takes before it's cleared. */
+  cap: number;
+  answered: number;
+  turns: number;
+  /** Turns before it moves on (roundsPerQuestion × players still in). */
+  maxTurns: number;
+  /** Players this question has beaten (fuse popped on them, or a sudden-death miss). */
+  stumped: string[];
+  startedAt: number;
+}
+
+export interface PlayedQuestion {
+  index: number;
+  text: string;
+  topic: string;
+  /** False for questions revealed once the game is over that it never reached. */
+  played: boolean;
+  /** Null when the game ended while this question was up, or it was never reached. */
+  endedBy: QuestionEndReason | null;
+}
+
+/** ok: enough good questions. thin: fewer than its share (other topics fill in). unusable: none. error: the writer failed. */
+export type TopicStatus = "ok" | "thin" | "unusable" | "error";
+
+export interface TopicReport {
+  topic: string;
+  status: TopicStatus;
+  /** This topic's share of the deck. */
+  wanted: number;
+  /** Questions it actually has in the deck. */
+  got: number;
+  /** A short note for the host when the topic is thin or unusable. */
+  reason: string | null;
+  /** A broader topic to try instead. */
+  suggestion: string | null;
+}
+
+export interface DeckInfo {
+  status: "generating" | "ready" | "failed";
+  /** Questions in the deck (not shown until played). */
+  ready: number;
+  wanted: number;
+  reports: TopicReport[];
+}
 
 export type TierId = "basic" | "solid" | "rare" | "superrare" | "jevillion";
 
 export type RejectReason = "invalid" | "duplicate" | "judge_error";
 
 export type PlayerRole = "player" | "spectator";
-export type PlayerStatus = "waiting" | "alive" | "eliminated" | "tappedOut";
+export type PlayerStatus = "waiting" | "alive" | "eliminated";
 
 export interface PlayerStats {
   accepted: number;
@@ -53,11 +113,11 @@ export interface PublicPlayer {
   status: PlayerStatus;
   lives: number;
   points: number;
-  /** Timed mode: progress towards the next bonus life, 0..BONUS_LIFE_POINTS. */
+  /** Progress towards the next bonus life, 0..BONUS_LIFE_POINTS. */
   meter: number;
   connected: boolean;
   joinedAt: number;
-  /** When this player was eliminated or tapped out. */
+  /** When this player was eliminated. */
   outAt: number | null;
   /** Finishing place, 1 = winner; set when the game ends. */
   place: number | null;
@@ -66,6 +126,8 @@ export interface PublicPlayer {
 
 export interface AcceptedAnswer {
   id: string;
+  /** Deck index of the question it answers. */
+  question: number;
   text: string;
   playerId: string;
   tier: TierId;
@@ -79,11 +141,11 @@ export interface TurnInfo {
   id: number;
   playerId: string;
   startedAt: number;
-  /** Absolute server epoch ms the turn ends. Null in free mode, with a mystery fuse, or while Jev is judging. */
+  /** Absolute server epoch ms the turn ends. Null with a mystery fuse, or while Jev is judging. */
   deadline: number | null;
-  /** Visible length of the turn in ms (null in free mode / mystery fuse). */
+  /** Visible length of the turn in ms (null with a mystery fuse). */
   durationMs: number | null;
-  /** Remaining ms frozen while Jev judges (timed mode, visible clock). */
+  /** Remaining ms frozen while Jev judges (visible clock only). */
   frozenRemainingMs: number | null;
   judging: { text: string } | null;
   attempts: number;
@@ -111,7 +173,8 @@ export interface Award {
 
 export interface PublicState {
   code: string;
-  topic: string;
+  topics: string[];
+  deck: DeckInfo;
   phase: Phase;
   settings: GameSettings;
   hostId: string | null;
@@ -119,6 +182,10 @@ export interface PublicState {
   turn: TurnInfo | null;
   turnOrder: string[];
   lap: number;
+  question: PublicQuestion | null;
+  /** Questions already played (plus, once the game is over, the ones it never reached). */
+  history: PlayedQuestion[];
+  /** Every accepted answer this game, across all questions. */
   answers: AcceptedAnswer[];
   /** Most recent verdicts, newest last. */
   log: Verdict[];
@@ -128,31 +195,12 @@ export interface PublicState {
   endReason: EndReason | null;
   awards: Award[];
   judge: JudgeKind;
-  /** Jev thinks the topic has under ~20 answers, so the board may run dry. Null until checked. */
-  shortList: boolean | null;
   /** Epoch ms when the room will be wiped if nothing happens. */
   expiresAt: number;
 }
 
 export type JudgeKind = "jev" | "mock";
 export type GeneratorKind = "openai" | "mock";
-
-/** ok: enough good questions. thin: fewer than its share (other topics fill in). unusable: none. error: the writer failed. */
-export type TopicStatus = "ok" | "thin" | "unusable" | "error";
-
-export interface TopicReport {
-  topic: string;
-  status: TopicStatus;
-  /** This topic's share of the deck. */
-  wanted: number;
-  /** Questions it actually has in the deck. */
-  got: number;
-  /** A short note for the host when the topic is thin or unusable. */
-  reason: string | null;
-  /** A broader topic to try instead. */
-  suggestion: string | null;
-}
-
 
 export type LifeLostReason = "timeout" | "wrong" | "duplicate";
 
@@ -163,13 +211,13 @@ export type GameEvent =
   | { type: "hostChanged"; playerId: string }
   | { type: "gameStarted" }
   | { type: "turnStarted"; playerId: string; turnId: number }
+  | { type: "questionStarted"; index: number; why: "start" | QuestionEndReason }
   | { type: "judging"; playerId: string; text: string }
   | { type: "accepted"; answer: AcceptedAnswer }
   | { type: "rejected"; verdict: Verdict }
   | { type: "lifeLost"; playerId: string; reason: LifeLostReason; livesLeft: number }
   | { type: "lifeEarned"; playerId: string; lives: number }
   | { type: "eliminated"; playerId: string }
-  | { type: "tappedOut"; playerId: string }
   | { type: "skipped"; playerId: string }
   | { type: "speedUp"; turnSeconds: number }
   | { type: "gameOver"; winnerId: string | null; reason: EndReason }
@@ -181,14 +229,14 @@ export const EMOTES: readonly Emote[] = ["clap", "lol", "fire", "shock", "hmm", 
 export type ClientMessage =
   | { type: "hello"; token: string; name: string | null }
   | { type: "start" }
-  | { type: "configure"; settings: Partial<GameSettings>; topic?: string }
+  | { type: "configure"; settings: Partial<GameSettings>; topics?: string[] }
+  | { type: "regenerate" }
   | { type: "submit"; text: string }
   | { type: "typing"; text: string }
-  | { type: "tapOut" }
   | { type: "kick"; playerId: string }
   | { type: "skip" }
   | { type: "end" }
-  | { type: "rematch"; topic?: string }
+  | { type: "rematch"; topics?: string[] }
   | { type: "emote"; emote: Emote }
   | { type: "becomePlayer" };
 
@@ -208,6 +256,7 @@ export type ErrorCode =
   | "bad_answer"
   | "already_judging"
   | "wrong_phase"
+  | "deck_not_ready"
   | "kicked";
 
 export type ServerMessage =
@@ -221,24 +270,21 @@ export type ServerMessage =
 // HTTP API
 
 export interface CreateRoomRequest {
-  topic: string;
+  topics: string[];
   settings: Partial<GameSettings>;
   token: string;
-  /** Create even if Jev thinks the topic is hard to list examples of. */
-  force?: boolean;
 }
 
-export type CreateRoomResponse =
-  | { ok: true; code: string }
-  | { ok: false; error: "bad_topic" | "bad_request" | "unavailable"; message: string }
-  | { ok: false; error: "topic_warning"; message: string; listability: number };
+export type CreateRoomResponse = { ok: true; code: string } | { ok: false; error: "bad_topic" | "bad_request" | "unavailable"; message: string };
 
 export type RoomInfoResponse =
-  | { ok: true; code: string; topic: string; phase: Phase; mode: GameMode; players: number; maxPlayers: number }
+  | { ok: true; code: string; topics: string[]; phase: Phase; players: number; maxPlayers: number }
   | { ok: false; error: "not_found" };
 
 export interface HealthResponse {
   ok: true;
   judge: JudgeKind;
   model: string | null;
+  generator: GeneratorKind;
+  generatorModel: string | null;
 }

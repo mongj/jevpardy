@@ -312,7 +312,7 @@ b {
 }
 
 input.name-input,
-textarea.topic-input,
+input.topic-input,
 input.code-input,
 input.answer-input {
   width: 100%;
@@ -332,10 +332,10 @@ textarea:focus {
     inset 0 0 0 var(--px) var(--yellow),
     0 0 16px rgba(255, 210, 63, 0.3);
 }
-textarea.topic-input {
-  resize: none;
-  font-size: 26px;
+input.topic-input {
+  font-size: 24px;
   color: var(--yellow);
+  min-width: 0;
 }
 ::placeholder {
   color: #4a4766;
@@ -510,47 +510,6 @@ input.code-input {
   box-shadow: inset 0 0 0 2px var(--yellow);
 }
 
-.mode-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.mode-card {
-  background: #0a0820;
-  border: 0;
-  padding: 14px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  text-align: center;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 var(--px) var(--line);
-}
-.mode-card.on {
-  box-shadow:
-    inset 0 0 0 var(--px) var(--pink),
-    0 0 18px rgba(255, 79, 216, 0.35);
-  background: #1a0d2e;
-}
-.mode-card:disabled {
-  cursor: default;
-}
-.mode-icon {
-  font-size: 32px;
-  color: var(--ink);
-  line-height: 1;
-}
-.mode-name {
-  font-family: var(--display);
-  font-size: 11px;
-  color: var(--yellow);
-}
-.mode-desc {
-  font-size: 17px;
-  color: var(--dim);
-}
-
 .timed-settings {
   display: flex;
   flex-direction: column;
@@ -690,14 +649,6 @@ input.code-input {
   font-family: var(--display);
   font-size: 9px;
 }
-.warning-modal {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -711,19 +662,6 @@ input.code-input {
 
 /* ─── join ─── */
 
-.topic-big {
-  font-size: 30px;
-  color: var(--yellow);
-  margin: 0 0 8px;
-  line-height: 1.1;
-}
-.short-list {
-  margin: 8px 0 0;
-  padding: 6px 8px;
-  color: var(--yellow);
-  border: 2px dashed var(--yellow);
-  line-height: 1.4;
-}
 .join-form {
   display: flex;
   flex-direction: column;
@@ -786,10 +724,6 @@ input.code-input {
 }
 .lobby-settings {
   margin-top: 16px;
-}
-.topic-edit input {
-  color: var(--yellow);
-  font-size: 26px;
 }
 .lobby-players {
   list-style: none;
@@ -880,22 +814,6 @@ input.code-input {
   gap: 14px;
 }
 
-.topic-banner {
-  text-align: center;
-  padding: 8px 12px 10px;
-  background: linear-gradient(90deg, transparent, rgba(255, 79, 216, 0.2), transparent);
-}
-.topic-banner .label {
-  margin-bottom: 2px;
-}
-.topic-text {
-  font-size: clamp(24px, 6vw, 34px);
-  color: var(--yellow);
-  text-shadow:
-    2px 2px 0 #3a1050,
-    0 0 12px rgba(255, 210, 63, 0.35);
-  line-height: 1.05;
-}
 
 .stage {
   background: var(--panel);
@@ -1094,11 +1012,6 @@ input.answer-input {
   justify-content: center;
   flex-wrap: wrap;
 }
-.tapout {
-  align-self: center;
-  color: var(--cyan);
-}
-
 .game-grid {
   display: grid;
   gap: 16px;
@@ -1690,4 +1603,204 @@ body:has(.host-bar) .mock-badge {
   .fx-burst {
     animation: none !important;
   }
+}
+
+/* ─── topics & deck ─── */
+
+.topic-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.topic-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topic-chip {
+  font-family: var(--body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  background: #1a0c2c;
+  color: var(--yellow);
+  font-size: 22px;
+  box-shadow: inset 0 0 0 2px var(--yellow);
+  max-width: 100%;
+}
+.topic-chips.readonly .topic-chip {
+  padding-right: 12px;
+}
+.topic-chip span {
+  overflow-wrap: anywhere;
+}
+.topic-chip button {
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.topic-chip button:hover {
+  color: var(--red);
+}
+.topic-add {
+  display: flex;
+  gap: 8px;
+}
+.topic-add-btn {
+  flex: none;
+  width: 52px;
+  background: #1c1840;
+  border: 0;
+  color: var(--yellow);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 var(--px) var(--line);
+}
+.topic-add-btn:disabled {
+  color: #4a4766;
+  cursor: default;
+}
+.topic-hint {
+  margin: 0;
+}
+.deck-hint {
+  grid-column: 1 / -1;
+  margin: 0 0 8px;
+}
+
+.deck-status {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.deck-line {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.deck-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.deck-warning {
+  padding: 8px 10px;
+  border: 2px dashed var(--orange);
+  color: var(--ink);
+}
+.deck-warning.unusable,
+.deck-warning.error {
+  border-color: var(--red);
+}
+.deck-warning p {
+  margin: 0 0 6px;
+}
+.deck-warning .tag {
+  color: var(--orange);
+}
+.deck-warning.unusable .tag,
+.deck-warning.error .tag {
+  color: var(--red);
+}
+
+/* ─── question card ─── */
+
+.question-card {
+  text-align: center;
+  padding: 10px 14px 12px;
+  background: linear-gradient(90deg, transparent, rgba(255, 79, 216, 0.22), transparent);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 79, 216, 0.5),
+    inset 0 -2px 0 rgba(255, 79, 216, 0.5);
+  animation: question-in 600ms steps(6);
+}
+@keyframes question-in {
+  0% {
+    transform: scaleY(0.1);
+    filter: brightness(2.5);
+  }
+}
+.question-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.question-meta .label {
+  margin: 0;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.question-topic {
+  font-size: 18px;
+  color: var(--cyan);
+  text-transform: lowercase;
+}
+.question-text {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 6.5vw, 38px);
+  color: var(--yellow);
+  line-height: 1.05;
+  text-shadow:
+    2px 2px 0 #3a1050,
+    0 0 12px rgba(255, 210, 63, 0.35);
+  overflow-wrap: anywhere;
+}
+.tag.final {
+  color: var(--pink);
+  animation: blink 1s steps(2) infinite;
+}
+
+.question-trail {
+  margin-top: 16px;
+  background: var(--panel);
+  padding: 12px;
+  box-shadow: inset 0 0 0 3px var(--line);
+}
+.question-trail ol {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.question-trail li {
+  display: flex;
+  flex-direction: column;
+}
+.trail-text {
+  color: var(--ink);
+  font-size: 19px;
+}
+
+.recap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.recap-text {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: var(--yellow);
+}
+.recap-unplayed ol {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--dim);
 }

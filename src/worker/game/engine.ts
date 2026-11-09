@@ -1,10 +1,12 @@
 import {
   AVATAR_COUNT,
   BONUS_LIFE_POINTS,
-  CLEAR_BONUS_POINTS,
   DEFAULT_SETTINGS,
   EMPTY_ROOM_MS,
-  FREE_DISCONNECT_GRACE_MS,
+  FUSE_FLOOR_FACTOR,
+  FUSE_FLOOR_MIN_MS,
+  FUSE_MAX_FACTOR,
+  FUSE_MIN_FACTOR,
   HOST_GRACE_MS,
   LOBBY_IDLE_MS,
   LOG_LIMIT,
@@ -12,10 +14,10 @@ import {
   MAX_LIVES,
   MAX_SPECTATORS,
   MIN_SUBMIT_INTERVAL_MS,
-  MYSTERY_FUSE_SPREAD,
   OVER_TTL_MS,
   PLAYER_COLORS,
   PLAYING_IDLE_MS,
+  QUESTION_REVEAL_MS,
   SPEED_UP_MIN_SECONDS,
   SPEED_UP_STEP_SECONDS,
   TIERS,
@@ -26,6 +28,7 @@ import {
 import type {
   AcceptedAnswer,
   Award,
+  DeckInfo,
   EndReason,
   ErrorCode,
   GameEvent,
@@ -33,20 +36,30 @@ import type {
   JudgeKind,
   LifeLostReason,
   Phase,
+  PlayedQuestion,
   PlayerRole,
   PlayerStats,
   PlayerStatus,
   PublicPlayer,
+  PublicQuestion,
   PublicState,
+  QuestionEndReason,
   TierId,
+  TopicReport,
   TurnInfo,
   Verdict,
 } from "../../shared/protocol.ts";
-import { normalizeAnswer, sanitizeAnswer, sanitizeName, sanitizeTopic } from "../../shared/sanitize.ts";
+import { normalizeAnswer, sanitizeAnswer, sanitizeName, sanitizeTopics, topicKey } from "../../shared/sanitize.ts";
 import type { JudgeInput, JudgeOutput, Thresholds } from "../judge/types.ts";
+import { type DeckQuestion, buildDeck, topicsToGenerate } from "../questions/deck.ts";
+import type { GenerateRequest, TopicPool } from "../questions/types.ts";
 
 /** A stuck judge call is treated as an error after this long. */
 export const JUDGE_STUCK_MS = 15_000;
+/** A deck still "generating" after this long (e.g. the object was evicted mid-call) is restarted. */
+export const GENERATION_STUCK_MS = 75_000;
+/** Pools kept for topics no longer in the room, so toggling a topic back is free. */
+const SPARE_POOLS = 6;
 
 export interface Ctx {
   now: number;
@@ -85,28 +98,54 @@ interface TurnRecord {
   attempts: number;
 }
 
+interface CurrentQuestion {
+  index: number;
+  startedAt: number;
+  /** Turns finished on this question (answered, failed or skipped). */
+  turns: number;
+  /** Players it has beaten, in order. */
+  failedBy: string[];
+}
+
+export interface Generation {
+  /** Bumped every time a new round of writing starts. */
+  id: number;
+  status: DeckInfo["status"];
+  startedAt: number | null;
+}
+
 export interface RoomState {
-  version: 1;
+  version: 2;
   code: string;
-  topic: string;
+  topics: string[];
   phase: Phase;
   settings: GameSettings;
   judge: JudgeKind;
-  shortList: boolean | null;
   maxPlayers: number;
   /** The creator's token; whoever connects with it gets the host crown. */
   hostToken: string | null;
   hostId: string | null;
   players: PlayerRecord[];
   kickedTokens: string[];
+  /** Everything the writer produced, per topic. Never sent to clients. */
+  pools: TopicPool[];
+  /** This game's questions in play order. Never sent to clients ahead of time. */
+  deck: DeckQuestion[];
+  deckReports: TopicReport[];
+  generation: Generation;
+  /** Every question played in this room, so rematches don't repeat them. */
+  played: string[];
+  question: CurrentQuestion | null;
+  history: PlayedQuestion[];
   turn: TurnRecord | null;
   turnCounter: number;
   turnOrder: string[];
   lap: number;
   currentTurnSeconds: number;
+  /** Mystery fuse: when the shared fuse pops (paused while Jev judges). */
+  fuseEndsAt: number | null;
   startingPlayers: number;
   answers: AcceptedAnswer[];
-  answerKeys: string[];
   log: Verdict[];
   createdAt: number;
   startedAt: number | null;
@@ -143,37 +182,42 @@ function emptyStats(): PlayerStats {
 
 export interface CreateRoomOptions {
   code: string;
-  topic: string;
+  topics: string[];
   settings?: Partial<GameSettings>;
   judge: JudgeKind;
   maxPlayers: number;
   hostToken?: string;
-  shortList?: boolean | null;
 }
 
 export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): RoomState {
   const settings = mergeSettings(DEFAULT_SETTINGS, opts.settings);
   return {
-    version: 1,
+    version: 2,
     code: opts.code,
-    topic: opts.topic,
+    topics: sanitizeTopics(opts.topics) ?? [],
     phase: "lobby",
     settings,
     judge: opts.judge,
-    shortList: opts.shortList ?? null,
     maxPlayers: opts.maxPlayers,
     hostToken: opts.hostToken ?? null,
     hostId: null,
     players: [],
     kickedTokens: [],
+    pools: [],
+    deck: [],
+    deckReports: [],
+    generation: { id: 0, status: "generating", startedAt: null },
+    played: [],
+    question: null,
+    history: [],
     turn: null,
     turnCounter: 0,
     turnOrder: [],
     lap: 0,
     currentTurnSeconds: settings.turnSeconds,
+    fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
-    answerKeys: [],
     log: [],
     createdAt: ctx.now,
     startedAt: null,
@@ -227,8 +271,8 @@ export function join(
   const name = sanitizeName(input.name);
   if (!name) return fail("bad_name", "Pick a display name (letters or numbers).");
 
-  const seatsLeft = contestants(state).length < state.maxPlayers;
-  const canPlay = seatsLeft && (state.phase === "lobby" || (state.phase === "playing" && state.settings.mode === "free"));
+  // Mid-game joiners watch until the next game.
+  const canPlay = state.phase === "lobby" && contestants(state).length < state.maxPlayers;
   if (!canPlay && state.players.filter((p) => p.role === "spectator").length >= MAX_SPECTATORS) {
     return fail("room_full", "This room is packed. Try again later.");
   }
@@ -242,7 +286,7 @@ export function join(
     avatar: state.players.length % AVATAR_COUNT,
     color,
     role: canPlay ? "player" : "spectator",
-    status: state.phase === "playing" && canPlay ? "alive" : "waiting",
+    status: "waiting",
     lives: 0,
     points: 0,
     meter: 0,
@@ -255,7 +299,6 @@ export function join(
     stats: emptyStats(),
   };
   state.players.push(player);
-  if (player.role === "player" && state.phase === "playing") state.turnOrder.push(player.id);
   if (!state.hostId || input.token === state.hostToken) {
     if (state.hostId && state.hostId !== player.id) events.push({ type: "hostChanged", playerId: player.id });
     state.hostId = player.id;
@@ -309,14 +352,9 @@ export function becomePlayer(state: RoomState, playerId: string, ctx: Ctx): Resu
   const player = findPlayer(state, playerId);
   if (!player) return fail("not_found", "Unknown player.");
   if (player.role === "player") return { ok: true, events: [] };
-  const joinable = state.phase === "lobby" || (state.phase === "playing" && state.settings.mode === "free");
-  if (!joinable) return fail("wrong_phase", "Wait for the next game to jump in.");
+  if (state.phase !== "lobby") return fail("wrong_phase", "Wait for the next game to jump in.");
   if (contestants(state).length >= state.maxPlayers) return fail("room_full", "All seats are taken.");
   player.role = "player";
-  if (state.phase === "playing") {
-    player.status = "alive";
-    state.turnOrder.push(player.id);
-  }
   touch(state, ctx);
   return { ok: true, events: [{ type: "playerJoined", playerId }] };
 }
@@ -329,8 +367,8 @@ export function kick(state: RoomState, actorId: string, targetId: string, ctx: C
   state.kickedTokens.push(target.token);
   const events: GameEvent[] = [{ type: "playerKicked", playerId: targetId }];
   const wasTurn = state.turn?.playerId === targetId;
+  // Keep the order intact until we've found who's next after the kicked player.
   state.players = state.players.filter((p) => p.id !== targetId);
-  state.turnOrder = state.turnOrder.filter((id) => id !== targetId);
   if (state.phase === "playing") {
     if (wasTurn) {
       state.turn = null;
@@ -339,41 +377,84 @@ export function kick(state: RoomState, actorId: string, targetId: string, ctx: C
       events.push(...checkGameOver(state, ctx));
     }
   }
+  state.turnOrder = state.turnOrder.filter((id) => id !== targetId);
   touch(state, ctx);
   return { ok: true, events };
 }
 
-function setTopic(state: RoomState, topic: string): void {
-  if (topic === state.topic) return;
-  state.topic = topic;
-  state.shortList = null;
+// ─── Lobby & deck ───────────────────────────────────────────────────────────
+
+/** What the deck needs from the question writer right now (empty when the pools already cover it). */
+export function deckPlan(state: RoomState): GenerateRequest[] {
+  return topicsToGenerate({ topics: state.topics, pools: state.pools, count: state.settings.questionCount, played: state.played });
 }
 
-/** Records Jev's short-list verdict, unless the topic changed again while it was being checked. */
-export function setShortList(state: RoomState, topic: string, shortList: boolean | null): boolean {
-  if (state.topic !== topic || state.shortList === shortList) return false;
-  state.shortList = shortList;
-  return true;
+/** Marks the deck as being written and returns the new generation id. */
+export function beginGeneration(state: RoomState, ctx: Pick<Ctx, "now">): number {
+  state.generation = { id: state.generation.id + 1, status: "generating", startedAt: ctx.now };
+  return state.generation.id;
 }
 
+/** Stores freshly written topic pools (replacing older ones for the same topic). */
+export function applyPools(state: RoomState, pools: TopicPool[]): void {
+  for (const pool of pools) {
+    state.pools = state.pools.filter((p) => p.key !== pool.key);
+    state.pools.push(pool);
+  }
+  const live = new Set(state.topics.map(topicKey));
+  const spare = state.pools.filter((p) => !live.has(p.key));
+  if (spare.length > SPARE_POOLS) {
+    const drop = new Set(spare.slice(0, spare.length - SPARE_POOLS).map((p) => p.key));
+    state.pools = state.pools.filter((p) => !drop.has(p.key));
+  }
+}
+
+/** Deals the deck from the pools. Only in the lobby: a game in progress keeps its deck. */
+export function rebuildDeck(state: RoomState, ctx: Pick<Ctx, "rng">): void {
+  if (state.phase !== "lobby") return;
+  const { questions, reports } = buildDeck({
+    topics: state.topics,
+    pools: state.pools,
+    count: state.settings.questionCount,
+    played: state.played,
+    rng: ctx.rng,
+  });
+  state.deck = questions;
+  state.deckReports = reports;
+  const writerDown = questions.length === 0 && reports.length > 0 && reports.every((r) => r.status === "error");
+  state.generation = { ...state.generation, status: writerDown ? "failed" : "ready", startedAt: null };
+}
+
+/** Host asks for another go at topics that came back thin, unusable or failed. */
+export function regenerate(state: RoomState, actorId: string, ctx: Ctx): Result {
+  if (!isHost(state, actorId)) return fail("not_host", "Only the host can do that.");
+  if (state.phase !== "lobby") return fail("wrong_phase", "The game already started.");
+  const retry = new Set(state.deckReports.filter((r) => r.status !== "ok").map((r) => topicKey(r.topic)));
+  state.pools = state.pools.filter((p) => !retry.has(p.key));
+  touch(state, ctx);
+  return { ok: true, events: [] };
+}
+
+/** True when topics or question count changed, so the room should top up the deck. */
 export function configure(
   state: RoomState,
   actorId: string,
   patch: Partial<GameSettings>,
-  topic: string | undefined,
+  topics: string[] | undefined,
   ctx: Ctx,
-): Result {
+): Result<{ deckChanged: boolean }> {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can change settings.");
   if (state.phase !== "lobby") return fail("wrong_phase", "Settings are locked once the game starts.");
-  if (topic !== undefined) {
-    const clean = sanitizeTopic(topic);
-    if (!clean) return fail("bad_message", "Topic is too short.");
-    setTopic(state, clean);
+  const before = `${state.topics.join("\n")}|${state.settings.questionCount}`;
+  if (topics !== undefined) {
+    const clean = sanitizeTopics(topics);
+    if (!clean) return fail("bad_message", "Add at least one topic (3+ characters).");
+    state.topics = clean;
   }
   state.settings = mergeSettings(state.settings, patch);
   state.currentTurnSeconds = state.settings.turnSeconds;
   touch(state, ctx);
-  return { ok: true, events: [] };
+  return { ok: true, events: [], deckChanged: before !== `${state.topics.join("\n")}|${state.settings.questionCount}` };
 }
 
 // ─── Game flow ──────────────────────────────────────────────────────────────
@@ -390,14 +471,15 @@ function shuffle<T>(items: T[], rng: () => number): T[] {
 export function start(state: RoomState, actorId: string, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can start the game.");
   if (state.phase !== "lobby") return fail("wrong_phase", "The game already started.");
+  if (state.generation.status === "generating") return fail("deck_not_ready", "Still writing the questions…");
+  if (state.deck.length === 0) return fail("deck_not_ready", "No playable questions yet. Try different topics.");
   // Whoever wandered off from the lobby doesn't get dealt in.
   state.players = state.players.filter((p) => p.connected || p.id === actorId);
   const roster = contestants(state);
   if (roster.length === 0) return fail("wrong_phase", "Need at least one player.");
-  const timed = state.settings.mode === "timed";
   for (const p of roster) {
     p.status = "alive";
-    p.lives = timed ? state.settings.lives : 0;
+    p.lives = state.settings.lives;
   }
   state.phase = "playing";
   state.startedAt = ctx.now;
@@ -408,27 +490,86 @@ export function start(state: RoomState, actorId: string, ctx: Ctx): Result {
   );
   state.lap = 1;
   state.currentTurnSeconds = state.settings.turnSeconds;
+  state.fuseEndsAt = null;
+  state.history = [];
   touch(state, ctx);
-  const events: GameEvent[] = [{ type: "gameStarted" }];
-  events.push(...beginTurn(state, state.turnOrder[0]!, ctx));
+  const events: GameEvent[] = [{ type: "gameStarted" }, ...openQuestion(state, 0, "start", ctx)];
+  events.push(...beginTurn(state, state.turnOrder[0]!, ctx, { freshFuse: true, reveal: true }));
   return { ok: true, events };
 }
 
-function beginTurn(state: RoomState, playerId: string, ctx: Ctx): GameEvent[] {
-  const timed = state.settings.mode === "timed";
-  let durationMs: number | null = null;
-  if (timed) {
-    const base = state.currentTurnSeconds * 1000;
-    durationMs = state.settings.mysteryFuse
-      ? Math.round(base * (1 - MYSTERY_FUSE_SPREAD + ctx.rng() * MYSTERY_FUSE_SPREAD * 2))
-      : base;
+function openQuestion(state: RoomState, index: number, why: "start" | QuestionEndReason, ctx: Pick<Ctx, "now">): GameEvent[] {
+  state.question = { index, startedAt: ctx.now, turns: 0, failedBy: [] };
+  const q = state.deck[index]!;
+  if (!state.played.includes(q.text)) state.played.push(q.text);
+  return [{ type: "questionStarted", index, why }];
+}
+
+function retireQuestion(state: RoomState, endedBy: QuestionEndReason | null): void {
+  const current = state.question;
+  if (!current) return;
+  const q = state.deck[current.index]!;
+  state.history.push({ index: current.index, text: q.text, topic: q.topic, played: true, endedBy });
+  state.question = null;
+}
+
+/** Retires the current question and opens the next one, or ends the game when the deck is spent. */
+function rotateQuestion(state: RoomState, why: QuestionEndReason, ctx: Ctx): GameEvent[] {
+  const index = state.question ? state.question.index + 1 : 0;
+  retireQuestion(state, why);
+  if (index >= state.deck.length) return finish(state, ctx, "questionsDone");
+  return openQuestion(state, index, why, ctx);
+}
+
+function answersFor(state: RoomState, index: number): AcceptedAnswer[] {
+  return state.answers.filter((a) => a.question === index);
+}
+
+function maxTurns(state: RoomState): number {
+  return state.settings.roundsPerQuestion * Math.max(1, activePlayers(state).length);
+}
+
+/**
+ * Puffer Party's rotation, as measured on krillion.io: a question that beats people moves on fast,
+ * and nobody faces a question that already beat them.
+ */
+export function questionEndReason(state: RoomState, nextPlayerId: string): QuestionEndReason | null {
+  const q = state.question;
+  if (!q) return null;
+  if (answersFor(state, q.index).length >= state.deck[q.index]!.cap) return "cleared";
+  if (q.turns >= maxTurns(state)) return "rounds";
+  const stumpLimit = activePlayers(state).length <= 2 ? 1 : 2;
+  if (q.failedBy.length >= stumpLimit || q.failedBy.includes(nextPlayerId)) return "stumped";
+  return null;
+}
+
+function fuseFloorMs(state: RoomState): number {
+  return Math.max(FUSE_FLOOR_MIN_MS, Math.round(state.currentTurnSeconds * 1000 * FUSE_FLOOR_FACTOR));
+}
+
+function beginTurn(state: RoomState, playerId: string, ctx: Ctx, opts: { freshFuse?: boolean; reveal?: boolean } = {}): GameEvent[] {
+  const base = state.currentTurnSeconds * 1000;
+  const reveal = opts.reveal ? QUESTION_REVEAL_MS : 0;
+  let deadline: number;
+  let durationMs: number;
+  if (state.settings.mysteryFuse) {
+    // One fuse for the whole table: passing it on keeps what's left, topped up to a floor.
+    if (opts.freshFuse || state.fuseEndsAt === null) {
+      state.fuseEndsAt = ctx.now + Math.round(base * (FUSE_MIN_FACTOR + ctx.rng() * (FUSE_MAX_FACTOR - FUSE_MIN_FACTOR)));
+    }
+    deadline = Math.max(state.fuseEndsAt, ctx.now + fuseFloorMs(state)) + reveal;
+    state.fuseEndsAt = deadline;
+    durationMs = deadline - ctx.now;
+  } else {
+    durationMs = base + reveal;
+    deadline = ctx.now + durationMs;
   }
   state.turnCounter += 1;
   state.turn = {
     id: state.turnCounter,
     playerId,
     startedAt: ctx.now,
-    deadline: durationMs === null ? null : ctx.now + durationMs,
+    deadline,
     durationMs,
     judging: null,
     attempts: 0,
@@ -441,30 +582,31 @@ function nextPlayerId(state: RoomState, afterId: string): { id: string; wrapped:
   const order = state.turnOrder;
   const active = new Set(activePlayers(state).map((p) => p.id));
   if (active.size === 0) return null;
-  const preferConnected = state.settings.mode === "free";
   const startIdx = order.indexOf(afterId);
-  const pick = (requireConnected: boolean) => {
-    for (let step = 1; step <= order.length; step++) {
-      const idx = (startIdx + step) % order.length;
-      const id = order[idx]!;
-      if (!active.has(id)) continue;
-      if (requireConnected && !findPlayer(state, id)?.connected) continue;
-      return { id, wrapped: startIdx === -1 ? false : idx <= startIdx };
-    }
-    return null;
-  };
-  return (preferConnected ? pick(true) : null) ?? pick(false);
+  for (let step = 1; step <= order.length; step++) {
+    const idx = (startIdx + step) % order.length;
+    const id = order[idx]!;
+    if (active.has(id)) return { id, wrapped: startIdx === -1 ? false : idx <= startIdx };
+  }
+  return null;
 }
 
-function advanceTurn(state: RoomState, fromId: string, ctx: Ctx): GameEvent[] {
+/** Ends the current turn: counts it against the question, rotates the question if it's done, and hands over. */
+function advanceTurn(state: RoomState, fromId: string, ctx: Ctx, opts: { freshFuse?: boolean } = {}): GameEvent[] {
   const over = checkGameOver(state, ctx);
   if (over.length > 0) return over;
+  if (state.question) state.question.turns += 1;
   const next = nextPlayerId(state, fromId);
   if (!next) return finish(state, ctx, "allOut");
   const events: GameEvent[] = [];
+  const why = questionEndReason(state, next.id);
+  if (why) {
+    events.push(...rotateQuestion(state, why, ctx));
+    if (state.phase !== "playing") return events;
+  }
   if (next.wrapped) {
     state.lap += 1;
-    if (state.settings.mode === "timed" && state.settings.speedUp) {
+    if (state.settings.speedUp) {
       const faster = Math.max(SPEED_UP_MIN_SECONDS, state.currentTurnSeconds - SPEED_UP_STEP_SECONDS);
       if (faster !== state.currentTurnSeconds) {
         state.currentTurnSeconds = faster;
@@ -472,16 +614,15 @@ function advanceTurn(state: RoomState, fromId: string, ctx: Ctx): GameEvent[] {
       }
     }
   }
-  events.push(...beginTurn(state, next.id, ctx));
+  events.push(...beginTurn(state, next.id, ctx, { freshFuse: opts.freshFuse, reveal: why !== null }));
   return events;
 }
 
 function checkGameOver(state: RoomState, ctx: Ctx): GameEvent[] {
   if (state.phase !== "playing") return [];
   const alive = activePlayers(state);
-  const timed = state.settings.mode === "timed";
-  // Last one standing wins in a multiplayer timed game; solo games play to the last heart.
-  const lastStanding = timed && state.startingPlayers > 1 && alive.length === 1 && contestants(state).length > 1;
+  // Last one standing wins a multiplayer game; solo games play to the last heart.
+  const lastStanding = state.startingPlayers > 1 && alive.length === 1 && contestants(state).length > 1;
   if (alive.length === 0) return finish(state, ctx, "allOut");
   if (lastStanding) return finish(state, ctx, "lastStanding");
   return [];
@@ -493,17 +634,19 @@ export function finish(state: RoomState, ctx: Pick<Ctx, "now">, reason: EndReaso
   state.endedAt = ctx.now;
   state.endReason = reason;
   state.turn = null;
+  state.fuseEndsAt = null;
+  retireQuestion(state, null);
+  // The mystery is over: reveal the questions the game never reached.
+  const reached = new Set(state.history.map((h) => h.index));
+  state.deck.forEach((q, index) => {
+    if (!reached.has(index)) state.history.push({ index, text: q.text, topic: q.topic, played: false, endedBy: null });
+  });
   const roster = contestants(state);
-  if (reason === "cleared") {
-    for (const p of roster) if (p.status === "alive") p.points += CLEAR_BONUS_POINTS;
-  }
-  const timed = state.settings.mode === "timed";
+  // Survivors first (by points), then by how late they were knocked out.
   const ranked = [...roster].sort((a, b) => {
-    if (timed) {
-      const aOut = a.status === "alive" ? Infinity : (a.outAt ?? 0);
-      const bOut = b.status === "alive" ? Infinity : (b.outAt ?? 0);
-      if (aOut !== bOut) return bOut - aOut;
-    }
+    const aOut = a.status === "alive" ? Infinity : (a.outAt ?? 0);
+    const bOut = b.status === "alive" ? Infinity : (b.outAt ?? 0);
+    if (aOut !== bOut) return bOut - aOut;
     if (a.points !== b.points) return b.points - a.points;
     return b.stats.accepted - a.stats.accepted;
   });
@@ -511,7 +654,7 @@ export function finish(state: RoomState, ctx: Pick<Ctx, "now">, reason: EndReaso
     p.place = i + 1;
   });
   const top = ranked[0];
-  state.winnerId = top && (top.points > 0 || timed) ? top.id : null;
+  state.winnerId = top?.id ?? null;
   state.awards = computeAwards(state);
   return [{ type: "gameOver", winnerId: state.winnerId, reason }];
 }
@@ -537,15 +680,20 @@ function computeAwards(state: RoomState): Award[] {
     const survivor = roster.find((p) => p.status === "alive");
     if (survivor) awards.push({ id: "survivor", title: "LAST ONE STANDING", blurb: "Outlasted everyone.", playerId: survivor.id });
   }
-  const closer = state.answers[state.answers.length - 1];
-  if (state.endReason === "cleared" && closer) {
-    awards.push({ id: "closer", title: "FINAL ANSWER", blurb: `"${closer.text}" cleared the board`, playerId: closer.playerId });
-  }
   const high = best(
     (p) => (p.points > 0 ? p.points : null),
     (a, b) => a > b,
   );
   if (high) awards.push({ id: "highscore", title: "HIGH SCORE", blurb: `${high.value} pts`, playerId: high.winner.id });
+  // Range: answered the most different questions.
+  const range = best(
+    (p) => {
+      const n = new Set(state.answers.filter((a) => a.playerId === p.id).map((a) => a.question)).size;
+      return n >= 3 ? n : null;
+    },
+    (a, b) => a > b,
+  );
+  if (range) awards.push({ id: "allrounder", title: "ALL-ROUNDER", blurb: `scored on ${range.value} questions`, playerId: range.winner.id });
   const rarest = best(
     (p) => (p.stats.bestTier ? tierIndex(p.stats.bestTier) : null),
     (a, b) => a > b,
@@ -581,7 +729,7 @@ export type SubmitResult =
   | Fail;
 
 export function submit(state: RoomState, playerId: string, rawText: string, ctx: Ctx): SubmitResult {
-  if (state.phase !== "playing" || !state.turn) return fail("wrong_phase", "No game in progress.");
+  if (state.phase !== "playing" || !state.turn || !state.question) return fail("wrong_phase", "No game in progress.");
   const turn = state.turn;
   if (turn.playerId !== playerId) return fail("not_your_turn", "Hold on — it's not your turn.");
   if (turn.judging) return fail("already_judging", "Jev is still thinking…");
@@ -598,10 +746,10 @@ export function submit(state: RoomState, playerId: string, rawText: string, ctx:
   turn.attempts += 1;
   touch(state, ctx);
 
+  const prior = answersFor(state, state.question.index);
   const key = normalizeAnswer(text);
-  const exactIdx = key ? state.answerKeys.indexOf(key) : -1;
-  if (exactIdx !== -1) {
-    const original = state.answers[exactIdx]!;
+  const original = key ? prior.find((a) => normalizeAnswer(a.text) === key) : undefined;
+  if (original) {
     const verdict = recordRejection(state, player, text, "duplicate", original.text, 1, null, ctx);
     return { ok: true, events: [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)], judge: null };
   }
@@ -615,11 +763,9 @@ export function submit(state: RoomState, playerId: string, rawText: string, ctx:
     events: [{ type: "judging", playerId, text }],
     turnId: turn.id,
     judge: {
-      topic: state.topic,
+      question: state.deck[state.question.index]!.text,
       answer: text,
-      prior: state.answers.map((a) => ({ id: a.id, text: a.text })),
-      // Only short topics can run dry; asking on big ones just gives players something to talk Jev into.
-      askExhausted: state.shortList === true,
+      prior: prior.map((a) => ({ id: a.id, text: a.text })),
     },
   };
 }
@@ -630,13 +776,11 @@ export interface Decision {
   duplicateOf: string | null;
   confidence: number;
   tier: TierId;
-  /** Accepted, and Jev thinks nothing valid is left to name. */
-  boardCleared: boolean;
 }
 
 export function decide(output: JudgeOutput, thresholds: Thresholds, answers: AcceptedAnswer[]): Decision {
   if (!output.ok) {
-    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic", boardCleared: false };
+    return { accepted: false, reason: "judge_error", duplicateOf: null, confidence: 0, tier: "basic" };
   }
   const tierLevel = Math.min(TIERS.length - 1, Math.max(0, Math.round(output.obscurity)));
   const tier = TIERS[tierLevel]!.id;
@@ -646,17 +790,10 @@ export function decide(output: JudgeOutput, thresholds: Thresholds, answers: Acc
   }
   if (dup) {
     const original = answers.find((a) => a.id === dup.id);
-    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier, boardCleared: false };
+    return { accepted: false, reason: "duplicate", duplicateOf: original?.text ?? null, confidence: output.validity, tier };
   }
   const accepted = output.validity >= thresholds.accept;
-  return {
-    accepted,
-    reason: accepted ? null : "invalid",
-    duplicateOf: null,
-    confidence: output.validity,
-    tier,
-    boardCleared: accepted && output.exhausted >= thresholds.exhausted,
-  };
+  return { accepted, reason: accepted ? null : "invalid", duplicateOf: null, confidence: output.validity, tier };
 }
 
 export function resolve(state: RoomState, turnId: number, decision: Decision, ctx: Ctx): GameEvent[] {
@@ -667,6 +804,7 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
   const remaining = turn.judging.remainingMs;
   turn.judging = null;
   turn.deadline = remaining === null ? null : ctx.now + Math.max(remaining, 1000);
+  if (state.settings.mysteryFuse && turn.deadline !== null) state.fuseEndsAt = turn.deadline;
   touch(state, ctx);
   if (!player) return advanceTurn(state, turn.playerId, ctx);
 
@@ -690,16 +828,11 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
   return [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)];
 }
 
-function acceptAnswer(
-  state: RoomState,
-  player: PlayerRecord,
-  text: string,
-  decision: Pick<Decision, "tier" | "confidence" | "boardCleared">,
-  ctx: Ctx,
-): GameEvent[] {
+function acceptAnswer(state: RoomState, player: PlayerRecord, text: string, decision: Pick<Decision, "tier" | "confidence">, ctx: Ctx): GameEvent[] {
   const tier = tierById(decision.tier);
   const answer: AcceptedAnswer = {
     id: ctx.newId(),
+    question: state.question?.index ?? 0,
     text,
     playerId: player.id,
     tier: tier.id,
@@ -708,7 +841,6 @@ function acceptAnswer(
     confidence: decision.confidence,
   };
   state.answers.push(answer);
-  state.answerKeys.push(normalizeAnswer(text));
   player.points += tier.points;
   const s = player.stats;
   s.accepted += 1;
@@ -737,20 +869,16 @@ function acceptAnswer(
   });
 
   const events: GameEvent[] = [{ type: "accepted", answer }];
-  if (state.settings.mode === "timed") {
-    player.meter += tier.points;
-    while (player.meter >= BONUS_LIFE_POINTS) {
-      player.meter -= BONUS_LIFE_POINTS;
-      if (player.lives < MAX_LIVES && player.status === "alive") {
-        player.lives += 1;
-        s.livesEarned += 1;
-        events.push({ type: "lifeEarned", playerId: player.id, lives: player.lives });
-      }
+  player.meter += tier.points;
+  while (player.meter >= BONUS_LIFE_POINTS) {
+    player.meter -= BONUS_LIFE_POINTS;
+    if (player.lives < MAX_LIVES && player.status === "alive") {
+      player.lives += 1;
+      s.livesEarned += 1;
+      events.push({ type: "lifeEarned", playerId: player.id, lives: player.lives });
     }
   }
-  if (decision.boardCleared) {
-    events.push(...finish(state, ctx, "cleared"));
-  } else if (isCurrentTurn) {
+  if (isCurrentTurn) {
     state.turn = null;
     events.push(...advanceTurn(state, player.id, ctx));
   }
@@ -791,14 +919,21 @@ function pushLog(state: RoomState, verdict: Verdict): void {
 }
 
 function applyWrongAnswerRule(state: RoomState, player: PlayerRecord, verdict: Verdict, ctx: Ctx): GameEvent[] {
-  if (state.settings.mode !== "timed" || state.settings.wrongAnswer !== "life") return [];
+  if (state.settings.wrongAnswer !== "life") return [];
   return loseLife(state, player, verdict.reason === "duplicate" ? "duplicate" : "wrong", ctx);
+}
+
+/** The current question beat this player. */
+function markStumped(state: RoomState, playerId: string): void {
+  const q = state.question;
+  if (q && !q.failedBy.includes(playerId)) q.failedBy.push(playerId);
 }
 
 function loseLife(state: RoomState, player: PlayerRecord, reason: LifeLostReason, ctx: Ctx): GameEvent[] {
   player.lives = Math.max(0, player.lives - 1);
   player.stats.livesLost += 1;
   if (reason === "timeout") player.stats.timeouts += 1;
+  markStumped(state, player.id);
   const events: GameEvent[] = [{ type: "lifeLost", playerId: player.id, reason, livesLeft: player.lives }];
   if (player.lives === 0) {
     player.status = "eliminated";
@@ -807,29 +942,12 @@ function loseLife(state: RoomState, player: PlayerRecord, reason: LifeLostReason
   }
   if (state.turn?.playerId === player.id) {
     state.turn = null;
-    events.push(...advanceTurn(state, player.id, ctx));
+    // A pop lights a brand-new fuse.
+    events.push(...advanceTurn(state, player.id, ctx, { freshFuse: true }));
   } else {
     events.push(...checkGameOver(state, ctx));
   }
   return events;
-}
-
-export function tapOut(state: RoomState, playerId: string, ctx: Ctx): Result {
-  if (state.phase !== "playing" || state.settings.mode !== "free") return fail("wrong_phase", "You can only tap out in Free & Easy mode.");
-  const player = findPlayer(state, playerId);
-  if (!player || player.status !== "alive") return fail("wrong_phase", "You're already out.");
-  if (state.turn?.judging && state.turn.playerId === playerId) return fail("already_judging", "Wait for Jev's verdict first.");
-  player.status = "tappedOut";
-  player.outAt = ctx.now;
-  touch(state, ctx);
-  const events: GameEvent[] = [{ type: "tappedOut", playerId }];
-  if (state.turn?.playerId === playerId) {
-    state.turn = null;
-    events.push(...advanceTurn(state, playerId, ctx));
-  } else {
-    events.push(...checkGameOver(state, ctx));
-  }
-  return { ok: true, events };
 }
 
 export function skip(state: RoomState, actorId: string, ctx: Ctx): Result {
@@ -849,13 +967,13 @@ export function end(state: RoomState, actorId: string, ctx: Ctx): Result {
   return { ok: true, events: finish(state, ctx, "host") };
 }
 
-export function rematch(state: RoomState, actorId: string, topic: string | undefined, ctx: Ctx): Result {
+export function rematch(state: RoomState, actorId: string, topics: string[] | undefined, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can start a rematch.");
   if (state.phase !== "over") return fail("wrong_phase", "Finish this game first.");
-  if (topic !== undefined) {
-    const clean = sanitizeTopic(topic);
-    if (!clean) return fail("bad_message", "Topic is too short.");
-    setTopic(state, clean);
+  if (topics !== undefined) {
+    const clean = sanitizeTopics(topics);
+    if (!clean) return fail("bad_message", "Add at least one topic (3+ characters).");
+    state.topics = clean;
   }
   state.players = state.players.filter((p) => p.connected);
   for (const p of state.players) {
@@ -870,13 +988,17 @@ export function rematch(state: RoomState, actorId: string, topic: string | undef
   }
   Object.assign(state, {
     phase: "lobby",
+    deck: [],
+    deckReports: [],
+    question: null,
+    history: [],
     turn: null,
     turnOrder: [],
     lap: 0,
     currentTurnSeconds: state.settings.turnSeconds,
+    fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
-    answerKeys: [],
     log: [],
     startedAt: null,
     endedAt: null,
@@ -884,6 +1006,8 @@ export function rematch(state: RoomState, actorId: string, topic: string | undef
     endReason: null,
     awards: [],
   } satisfies Partial<RoomState>);
+  // The room deals a fresh deck (without repeats) right after this.
+  state.generation = { ...state.generation, status: "generating", startedAt: ctx.now };
   if (!findPlayer(state, state.hostId)) promoteHost(state);
   touch(state, ctx);
   return { ok: true, events: [{ type: "backToLobby" }] };
@@ -904,7 +1028,7 @@ export function tick(state: RoomState, ctx: Ctx): GameEvent[] {
 
   if (turn.judging) {
     if (ctx.now - turn.judging.startedAt >= JUDGE_STUCK_MS && player) {
-      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1, exhausted: 1 }, []), ctx));
+      events.push(...resolve(state, turn.id, decide({ ok: false, error: "timeout" }, { accept: 1, duplicate: 1 }, []), ctx));
     }
     return events;
   }
@@ -915,17 +1039,6 @@ export function tick(state: RoomState, ctx: Ctx): GameEvent[] {
     }
     return [...events, ...loseLife(state, player, "timeout", ctx)];
   }
-  if (
-    state.settings.mode === "free" &&
-    player &&
-    !player.connected &&
-    player.disconnectedAt !== null &&
-    ctx.now - player.disconnectedAt >= FREE_DISCONNECT_GRACE_MS &&
-    activePlayers(state).some((p) => p.connected)
-  ) {
-    state.turn = null;
-    events.push({ type: "skipped", playerId: player.id }, ...advanceTurn(state, player.id, ctx));
-  }
   return events;
 }
 
@@ -935,17 +1048,20 @@ export function expiresAt(state: RoomState): number {
   return state.emptySince === null ? idle : Math.min(idle, state.emptySince + EMPTY_ROOM_MS);
 }
 
+/** When a deck that's still being written should be considered stuck and restarted. */
+export function generationStuckAt(state: RoomState): number | null {
+  return state.generation.status === "generating" && state.generation.startedAt !== null ? state.generation.startedAt + GENERATION_STUCK_MS : null;
+}
+
 /** When the Durable Object alarm should next fire. */
 export function nextAlarmAt(state: RoomState): number {
   const times = [expiresAt(state)];
+  const stuck = generationStuckAt(state);
+  if (stuck !== null) times.push(stuck);
   const turn = state.turn;
   if (state.phase === "playing" && turn) {
     if (turn.judging) times.push(turn.judging.startedAt + JUDGE_STUCK_MS);
     else if (turn.deadline !== null) times.push(turn.deadline);
-    const p = findPlayer(state, turn.playerId);
-    if (state.settings.mode === "free" && p && !p.connected && p.disconnectedAt !== null) {
-      times.push(p.disconnectedAt + FREE_DISCONNECT_GRACE_MS);
-    }
   }
   const host = findPlayer(state, state.hostId);
   if (host && !host.connected && host.disconnectedAt !== null && state.players.some((p) => p.connected)) {
@@ -972,11 +1088,34 @@ function publicTurn(state: RoomState): TurnInfo | null {
   };
 }
 
+function publicQuestion(state: RoomState): PublicQuestion | null {
+  const q = state.question;
+  if (!q || state.phase !== "playing") return null;
+  const card = state.deck[q.index]!;
+  return {
+    index: q.index,
+    text: card.text,
+    topic: card.topic,
+    cap: card.cap,
+    answered: answersFor(state, q.index).length,
+    turns: q.turns,
+    maxTurns: maxTurns(state),
+    stumped: [...q.failedBy],
+    startedAt: q.startedAt,
+  };
+}
+
 export function toPublic(state: RoomState): PublicState {
   const players: PublicPlayer[] = state.players.map(({ token: _token, disconnectedAt: _d, lastSubmitAt: _l, ...rest }) => rest);
   return {
     code: state.code,
-    topic: state.topic,
+    topics: state.topics,
+    deck: {
+      status: state.generation.status,
+      ready: state.deck.length,
+      wanted: state.settings.questionCount,
+      reports: state.deckReports,
+    },
     phase: state.phase,
     settings: state.settings,
     hostId: state.hostId,
@@ -984,6 +1123,8 @@ export function toPublic(state: RoomState): PublicState {
     turn: publicTurn(state),
     turnOrder: state.turnOrder,
     lap: state.lap,
+    question: publicQuestion(state),
+    history: state.history,
     answers: state.answers,
     log: state.log,
     startedAt: state.startedAt,
@@ -992,7 +1133,6 @@ export function toPublic(state: RoomState): PublicState {
     endReason: state.endReason ?? null,
     awards: state.awards,
     judge: state.judge,
-    shortList: state.shortList ?? null,
     expiresAt: expiresAt(state),
   };
 }

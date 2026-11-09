@@ -18,9 +18,11 @@
     "JEV_MODEL": "jev-latest",
     "ACCEPT_THRESHOLD": "0.7",
     "DUPLICATE_THRESHOLD": "0.75",
-    // P(nothing left to name) at which an accepted answer clears the board and ends the game.
-    "EXHAUSTED_THRESHOLD": "0.5",
-    "MAX_PLAYERS": "12"
+    "MAX_PLAYERS": "12",
+    // Question writer. "auto" uses OpenAI when OPENAI_API_KEY is set, otherwise the mock writer. "mock" forces the mock.
+    "GENERATOR_MODE": "auto",
+    "OPENAI_MODEL": "gpt-5.4-mini",
+    "OPENAI_REASONING_EFFORT": "low"
   },
   "observability": {
     "enabled": true,

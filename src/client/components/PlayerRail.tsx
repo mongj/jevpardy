@@ -3,8 +3,8 @@ import type { PublicPlayer, PublicState } from "../../shared/protocol.ts";
 import { Crown, Hearts, Icon, Sprite } from "./Pixel.tsx";
 
 export function PlayerChip({ player, state, meId, active, onKick }: { player: PublicPlayer; state: PublicState; meId: string; active: boolean; onKick?: () => void }) {
-  const out = player.status === "eliminated" || player.status === "tappedOut";
-  const timed = state.settings.mode === "timed";
+  const out = player.status === "eliminated";
+  const stumped = !out && !!state.question?.stumped.includes(player.id);
   return (
     <li className={`player ${active ? "active" : ""} ${out ? "out" : ""} ${player.connected ? "" : "offline"} ${player.id === meId ? "me" : ""}`} style={{ ["--pc" as string]: player.color }}>
       <span className="player-sprite">
@@ -15,18 +15,20 @@ export function PlayerChip({ player, state, meId, active, onKick }: { player: Pu
         <span className="player-name">
           {player.name}
           {player.id === meId && <span className="you-tag">YOU</span>}
-        </span>
-        {state.phase !== "lobby" &&
-          (timed ? (
-            <span className="player-meta">
-              {player.status === "eliminated" ? <span className="tag red">K.O.</span> : <Hearts lives={player.lives} max={state.settings.lives} size={12} />}
-              <span className="meter" title="1UP meter">
-                <span style={{ width: `${(player.meter / BONUS_LIFE_POINTS) * 100}%` }} />
-              </span>
+          {stumped && (
+            <span className="tag red" title="This question beat them">
+              STUMPED
             </span>
-          ) : (
-            <span className="player-meta">{player.status === "tappedOut" ? <span className="tag dim">TAPPED OUT</span> : <span className="tag green">IN</span>}</span>
-          ))}
+          )}
+        </span>
+        {state.phase !== "lobby" && (
+          <span className="player-meta">
+            {player.status === "eliminated" ? <span className="tag red">K.O.</span> : <Hearts lives={player.lives} max={state.settings.lives} size={12} />}
+            <span className="meter" title="1UP meter">
+              <span style={{ width: `${(player.meter / BONUS_LIFE_POINTS) * 100}%` }} />
+            </span>
+          </span>
+        )}
         {!player.connected && <span className="tag dim">OFFLINE</span>}
       </span>
       {state.phase !== "lobby" && <span className="player-points">{player.points}</span>}

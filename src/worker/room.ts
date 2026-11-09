@@ -4,32 +4,39 @@ import {
   type Ctx,
   type Result,
   type RoomState,
+  applyPools,
   becomePlayer,
+  beginGeneration,
   configure,
   createRoom,
   decide,
+  deckPlan,
   disconnect,
   end,
   expiresAt,
   findPlayer,
+  generationStuckAt,
   join,
   kick,
   nextAlarmAt,
+  rebuildDeck,
+  regenerate,
   rematch,
   resolve,
-  setShortList,
   skip,
   start,
   submit,
   syncConnections,
-  tapOut,
   tick,
   toPublic,
 } from "./game/engine.ts";
 import { MAX_ANSWER_LENGTH, MIN_TYPING_INTERVAL_MS } from "../shared/constants.ts";
+import { topicKey } from "../shared/sanitize.ts";
 import { createJudge, thresholdsFromEnv } from "./judge/index.ts";
-import { SHORT_TOPIC_THRESHOLD } from "./judge/questions.ts";
 import type { Judge } from "./judge/types.ts";
+import { applyVetting, failedPool, mergeBatch } from "./questions/deck.ts";
+import { createGenerator } from "./questions/index.ts";
+import type { GenerateRequest, QuestionGenerator, TopicPool } from "./questions/types.ts";
 import { log, randomId } from "./util.ts";
 
 const STORAGE_KEY = "room";
@@ -42,26 +49,34 @@ interface Attachment {
 
 export interface CreateOptions {
   code: string;
-  topic: string;
+  topics: string[];
   settings: Partial<GameSettings>;
   hostToken: string;
-  shortList: boolean | null;
 }
 
 export class GameRoom extends DurableObject<Env> {
   private room: RoomState | null;
   private readonly judge: Judge;
+  private readonly generator: QuestionGenerator;
   private readonly lastTypingAt = new Map<string, number>();
+  /** The deck-writing job in flight, if any; edits made meanwhile set `deckDirty` so it runs again. */
+  private writing: Promise<void> | null = null;
+  private deckDirty = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.judge = createJudge(env);
+    this.generator = createGenerator(env);
     // Answered by the runtime without waking the object.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
-    this.room = ctx.storage.kv.get<RoomState>(STORAGE_KEY) ?? null;
+    const stored = ctx.storage.kv.get<RoomState>(STORAGE_KEY) ?? null;
+    // Rooms from before question decks can't be resumed; they're short-lived anyway.
+    this.room = stored?.version === 2 ? stored : null;
     if (this.room) {
       // After an eviction (deploy, crash) sockets are gone; after hibernation they're still here.
       syncConnections(this.room, this.connectedPlayerIds(), { now: Date.now() });
+      // Evicted mid-write: start again.
+      if (this.room.generation.status === "generating") this.ensureDeck();
     }
   }
 
@@ -85,11 +100,19 @@ export class GameRoom extends DurableObject<Env> {
     if (this.room) await this.wipe();
     const maxPlayers = Number(this.env.MAX_PLAYERS) || 12;
     this.room = createRoom(
-      { code: opts.code, topic: opts.topic, settings: opts.settings, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken, shortList: opts.shortList },
+      { code: opts.code, topics: opts.topics, settings: opts.settings, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken },
       { now: Date.now() },
     );
     await this.persist();
-    log("info", "room.created", { code: opts.code, mode: this.room.settings.mode, judge: this.judge.kind });
+    log("info", "room.created", {
+      code: opts.code,
+      topics: this.room.topics.length,
+      questions: this.room.settings.questionCount,
+      judge: this.judge.kind,
+      generator: this.generator.kind,
+    });
+    // The host lands in the lobby straight away while the questions are written.
+    this.ensureDeck();
     return { ok: true };
   }
 
@@ -99,9 +122,8 @@ export class GameRoom extends DurableObject<Env> {
     return {
       ok: true,
       code: room.code,
-      topic: room.topic,
+      topics: room.topics,
       phase: room.phase,
-      mode: room.settings.mode,
       players: room.players.filter((p) => p.role === "player").length,
       maxPlayers: room.maxPlayers,
     };
@@ -143,16 +165,22 @@ export class GameRoom extends DurableObject<Env> {
       case "start":
         return this.apply(ws, start(room, playerId, ctx));
       case "configure": {
-        const before = room.topic;
-        await this.apply(ws, configure(room, playerId, msg.settings ?? {}, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
-        return this.recheckTopic(before);
+        const topics = Array.isArray(msg.topics) ? msg.topics : undefined;
+        const result = configure(room, playerId, msg.settings ?? {}, topics, ctx);
+        await this.apply(ws, result);
+        if (result.ok && result.deckChanged) this.ensureDeck();
+        return;
+      }
+      case "regenerate": {
+        const result = regenerate(room, playerId, ctx);
+        await this.apply(ws, result);
+        if (result.ok) this.ensureDeck();
+        return;
       }
       case "submit":
         return this.onSubmit(ws, room, playerId, typeof msg.text === "string" ? msg.text : "");
       case "typing":
         return this.onTyping(room, playerId, typeof msg.text === "string" ? msg.text : "");
-      case "tapOut":
-        return this.apply(ws, tapOut(room, playerId, ctx));
       case "kick": {
         const target = typeof msg.playerId === "string" ? msg.playerId : "";
         const result = kick(room, playerId, target, ctx);
@@ -164,9 +192,10 @@ export class GameRoom extends DurableObject<Env> {
       case "end":
         return this.apply(ws, end(room, playerId, ctx));
       case "rematch": {
-        const before = room.topic;
-        await this.apply(ws, rematch(room, playerId, typeof msg.topic === "string" ? msg.topic : undefined, ctx));
-        return this.recheckTopic(before);
+        const result = rematch(room, playerId, Array.isArray(msg.topics) ? msg.topics : undefined, ctx);
+        await this.apply(ws, result);
+        if (result.ok) this.ensureDeck();
+        return;
       }
       case "becomePlayer":
         return this.apply(ws, becomePlayer(room, playerId, ctx));
@@ -212,25 +241,78 @@ export class GameRoom extends DurableObject<Env> {
     const decision = decide(output, thresholdsFromEnv(this.env), current.answers);
     log("info", "answer.judged", {
       code: current.code,
+      question: result.judge.question,
       answer: result.judge.answer,
       accepted: decision.accepted,
       reason: decision.reason,
       confidence: Number(decision.confidence.toFixed(3)),
       tier: decision.tier,
-      boardCleared: decision.boardCleared,
       judge: this.judge.kind,
-      ...(output.ok ? { exhausted: Number(output.exhausted.toFixed(3)) } : { error: output.error }),
+      ...(output.ok ? {} : { error: output.error }),
     });
     await this.commit(resolve(current, result.turnId, decision, this.ctxNow()));
   }
 
-  /** After the host changes the topic, ask Jev again whether it's a short list. */
-  private async recheckTopic(previousTopic: string): Promise<void> {
-    const topic = this.room?.topic;
-    if (!topic || topic === previousTopic) return;
-    const check = await this.judge.checkTopic(topic);
+  // ─── Question deck ────────────────────────────────────────────────────────
+
+  /** Brings the deck in line with the lobby's topics and question count, writing questions if needed. */
+  private ensureDeck(): void {
+    if (this.writing) {
+      this.deckDirty = true;
+      return;
+    }
+    this.deckDirty = false;
+    this.writing = this.writeDeck()
+      .catch((err) => log("error", "deck.failed", { error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => {
+        this.writing = null;
+        if (this.deckDirty) this.ensureDeck();
+      });
+    this.ctx.waitUntil(this.writing);
+  }
+
+  private async writeDeck(): Promise<void> {
     const room = this.room;
-    if (room && setShortList(room, topic, check ? check.short >= SHORT_TOPIC_THRESHOLD : null)) await this.commit([]);
+    if (!room || room.phase !== "lobby") return;
+    const requests = deckPlan(room);
+    if (requests.length === 0) {
+      rebuildDeck(room, this.ctxNow());
+      return this.commit([]);
+    }
+    beginGeneration(room, this.ctxNow());
+    await this.commit([]);
+    const started = Date.now();
+    const pools = await Promise.all(requests.map((req) => this.writeTopic(room, req)));
+    const current = this.room;
+    if (!current || current !== room) return;
+    applyPools(current, pools);
+    log("info", "deck.written", {
+      code: current.code,
+      topics: pools.map((p) => ({ topic: p.topic, verdict: p.verdict, kept: p.candidates.length, error: p.error })),
+      ms: Date.now() - started,
+    });
+    // The host changed something mid-write: the next pass deals the deck.
+    if (this.deckDirty) return this.persist();
+    // Pools still short (e.g. vetting dropped a few): another batch, bounded by MAX_BATCHES. Errors go
+    // to the host instead (RETRY), so a writer outage doesn't loop.
+    if (pools.every((p) => !p.error) && deckPlan(current).length > 0) {
+      this.deckDirty = true;
+      return this.persist();
+    }
+    rebuildDeck(current, this.ctxNow());
+    await this.commit([]);
+  }
+
+  /** Writes and vets one topic's questions. Never throws: a failure becomes an errored pool. */
+  private async writeTopic(room: RoomState, req: GenerateRequest): Promise<TopicPool> {
+    const previous = room.pools.find((p) => p.key === topicKey(req.topic));
+    try {
+      const batch = await this.generator.generate(req);
+      const vetting = await this.judge.vetQuestions(batch.candidates.map((c) => ({ text: c.text, examples: c.examples })));
+      return mergeBatch(previous, req.topic, req.count, { ...batch, candidates: applyVetting(batch.candidates, vetting) });
+    } catch (err) {
+      return failedPool(previous, req.topic, err instanceof Error ? err.message : String(err));
+    }
   }
 
   private onTyping(room: RoomState, playerId: string, text: string): void {
@@ -269,6 +351,12 @@ export class GameRoom extends DurableObject<Env> {
       log("info", "room.expired", { code: room.code, phase: room.phase });
       await this.wipe();
       return;
+    }
+    const stuck = generationStuckAt(room);
+    if (stuck !== null && Date.now() >= stuck && !this.writing) {
+      log("warn", "deck.restarted", { code: room.code });
+      room.generation.startedAt = Date.now();
+      this.ensureDeck();
     }
     await this.commit(tick(room, this.ctxNow()));
   }

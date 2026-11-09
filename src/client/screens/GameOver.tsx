@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { CLEAR_BONUS_POINTS, MAX_TOPIC_LENGTH, tierById } from "../../shared/constants.ts";
+import { tierById } from "../../shared/constants.ts";
 import type { ClientMessage, EndReason, PublicPlayer, PublicState } from "../../shared/protocol.ts";
-import { AnswerWall } from "../components/AnswerWall.tsx";
+import { QuestionRecap } from "../components/AnswerWall.tsx";
 import { Crown, Icon, JevBot, Sprite } from "../components/Pixel.tsx";
+import { TopicEditor, withDraft } from "../components/TopicChips.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
 import { useTicker } from "../lib/clock.ts";
 import { navigate } from "../lib/router.ts";
@@ -18,8 +19,8 @@ function endLine(reason: EndReason | null, winner: PublicPlayer): string {
   switch (reason) {
     case "lastStanding":
       return "Last one standing";
-    case "cleared":
-      return "Board cleared";
+    case "questionsDone":
+      return `${winner.points} points, still standing`;
     case "allOut":
     case "host":
     case null:
@@ -43,21 +44,17 @@ function Selfdestruct({ at, offset }: { at: number; offset: number }) {
 
 export function GameOver({ state, meId, offset, send }: { state: PublicState; meId: string; offset: number; send: (m: ClientMessage) => void }) {
   const isHost = state.hostId === meId;
-  const [topic, setTopic] = useState(state.topic);
+  const [topics, setTopics] = useState(state.topics);
+  const [draft, setDraft] = useState("");
+  const nextTopics = withDraft(topics, draft);
+  const played = state.history.filter((h) => h.played).length;
   const ranked = state.players.filter((p) => p.role === "player").sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
   const winner = state.players.find((p) => p.id === state.winnerId);
-  const timed = state.settings.mode === "timed";
 
   return (
     <div className="game-over">
-      {state.endReason === "cleared" ? (
-        <>
-          <h1 className="game-over-title cleared">BOARD CLEARED!</h1>
-          <p className="cleared-note small muted">Jev reckons there's nothing left to name. Everyone still in got +{CLEAR_BONUS_POINTS}.</p>
-        </>
-      ) : (
-        <h1 className="game-over-title">GAME OVER</h1>
-      )}
+      <h1 className={`game-over-title ${state.endReason === "questionsDone" ? "cleared" : ""}`}>GAME OVER</h1>
+      {state.endReason === "questionsDone" && <p className="cleared-note small muted">All {played} questions played.</p>}
       <div className="podium">
         {winner ? (
           <>
@@ -69,7 +66,8 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
               {winner.id === meId ? "YOU WIN!" : `${winner.name} WINS!`}
             </p>
             <p className="small muted">
-              {endLine(state.endReason, winner)} · {state.answers.length} answers found
+              {endLine(state.endReason, winner)} · {state.answers.length} answers over {played}{" "}
+              {played === 1 ? "question" : "questions"}
             </p>
           </>
         ) : (
@@ -110,7 +108,7 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
               <th aria-label="bounced">
                 <Icon name="close" />
               </th>
-              <th>{timed ? "ALIVE" : "TIME"}</th>
+              <th>ALIVE</th>
               <th className="hide-sm">BEST</th>
             </tr>
           </thead>
@@ -132,7 +130,7 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
         </table>
       </Panel>
 
-      <AnswerWall answers={state.answers} players={state.players} highlightId={null} />
+      <QuestionRecap history={state.history} answers={state.answers} players={state.players} />
 
       <div className="over-actions">
         {isHost ? (
@@ -140,14 +138,13 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
             className="panel accent-green rematch"
             onSubmit={(e) => {
               e.preventDefault();
-              send({ type: "rematch", topic });
+              if (nextTopics.length > 0) send({ type: "rematch", topics: nextTopics });
             }}
           >
-            <label className="label" htmlFor="rematch-topic">
-              NEXT TOPIC
-            </label>
-            <input id="rematch-topic" className="name-input" value={topic} maxLength={MAX_TOPIC_LENGTH} onChange={(e) => setTopic(e.target.value)} />
-            <PixelButton big tone="green" type="submit">
+            <p className="label">NEXT GAME'S TOPICS</p>
+            <TopicEditor topics={topics} onChange={setTopics} draft={draft} onDraft={setDraft} />
+            <p className="small muted">Fresh questions, no repeats from this room.</p>
+            <PixelButton big tone="green" type="submit" disabled={nextTopics.length === 0}>
               <Icon name="replay" /> PLAY AGAIN
             </PixelButton>
           </form>

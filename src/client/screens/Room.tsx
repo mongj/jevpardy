@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tierById, tierIndex } from "../../shared/constants.ts";
-import type { Emote, GameEvent, PublicState } from "../../shared/protocol.ts";
+import type { Emote, GameEvent, PublicState, QuestionEndReason } from "../../shared/protocol.ts";
 import { sanitizeName } from "../../shared/sanitize.ts";
 import { FxLayer, type FxHandle } from "../components/FxLayer.tsx";
 import { EmoteArt, Icon, JevBot, type JevMood } from "../components/Pixel.tsx";
@@ -13,6 +13,13 @@ import { Game } from "./Game.tsx";
 import { GameOver } from "./GameOver.tsx";
 import { JoinGate, NoRoom } from "./JoinGate.tsx";
 import { Lobby } from "./Lobby.tsx";
+
+const QUESTION_HEADLINE: Record<"start" | QuestionEndReason, string | null> = {
+  start: null,
+  stumped: "STUMPED!",
+  cleared: "CLEARED!",
+  rounds: "NEW QUESTION!",
+};
 
 interface FloatingEmote {
   id: number;
@@ -74,8 +81,24 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
             sfx.coin();
             onWarp(true);
             setTimeout(() => onWarp(false), 1200);
-            f?.burst({ text: "READY?", sub: state.topic, color: "var(--yellow)", kind: "big" });
             break;
+          case "questionStarted": {
+            const q = state.question;
+            const label = e.index === state.deck.ready - 1 && e.index > 0 ? "FINAL QUESTION" : `QUESTION ${e.index + 1}`;
+            const headline = QUESTION_HEADLINE[e.why];
+            // Let whatever just happened (a pop, a point) land before the reveal replaces it.
+            const delay = e.why === "start" ? 0 : 650;
+            setTimeout(() => {
+              sfx.speedUp();
+              fx.current?.burst({
+                text: headline ?? label,
+                sub: q ? `${headline ? `${label}: ` : ""}${q.text}` : undefined,
+                color: e.why === "stumped" ? "var(--pink)" : "var(--yellow)",
+                kind: "big",
+              });
+            }, delay);
+            break;
+          }
           case "turnStarted":
             if (e.playerId === meId) {
               sfx.yourTurn();
@@ -151,9 +174,6 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
               fx.current?.burst({ text: "K.O.!", sub: `${e.playerId === meId ? "YOU'RE" : `${nameOf(e.playerId)} IS`} OUT`, color: "var(--pink)", kind: "big" });
             }, 700);
             break;
-          case "tappedOut":
-            f?.burst({ text: "TAPPED OUT", sub: nameOf(e.playerId), color: "var(--cyan)", kind: "float" });
-            break;
           case "skipped":
             f?.burst({ text: "SKIP", sub: nameOf(e.playerId), color: "var(--dim)", kind: "float" });
             break;
@@ -163,7 +183,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
             break;
           case "gameOver": {
             const won = e.winnerId === meId;
-            if (e.reason === "cleared") f?.burst({ text: "BOARD CLEARED!", sub: "nothing left to name", color: "var(--green)", kind: "big" });
+            if (e.reason === "questionsDone") f?.burst({ text: "THAT'S ALL, FOLKS!", sub: "the deck is empty", color: "var(--green)", kind: "big" });
             setTimeout(() => {
               sfx.gameOver(won);
               fx.current?.confetti(["#ffd23f", "#3ef0ff", "#ff4fd8", "#7dff6b"], 90);

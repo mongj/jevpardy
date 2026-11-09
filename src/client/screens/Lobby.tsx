@@ -1,27 +1,101 @@
-import { useEffect, useState } from "react";
-import { MAX_TOPIC_LENGTH } from "../../shared/constants.ts";
-import type { ClientMessage, PublicState } from "../../shared/protocol.ts";
+import { useState } from "react";
+import type { ClientMessage, PublicState, TopicReport } from "../../shared/protocol.ts";
 import { Crown, Icon, JevBot, Sprite } from "../components/Pixel.tsx";
 import { QRCode } from "../components/QRCode.tsx";
+import { TopicEditor, TopicList } from "../components/TopicChips.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
-import { ModePicker, TimedSettings, settingsSummary } from "./SettingsForm.tsx";
+import { DeckSettings, TimedSettings, settingsSummary } from "./SettingsForm.tsx";
+
+const STATUS_LABEL: Record<Exclude<TopicReport["status"], "ok">, string> = {
+  thin: "THIN",
+  unusable: "NO GOOD",
+  error: "FAILED",
+};
+
+/** Where the secret deck is at. Everyone sees the count; only the host sees per-topic warnings. */
+function DeckStatus({ state, isHost, send }: { state: PublicState; isHost: boolean; send: (m: ClientMessage) => void }) {
+  const { deck } = state;
+  const warnings = deck.reports.filter((r) => r.status !== "ok");
+  const replace = (from: string, to: string | null) =>
+    send({ type: "configure", settings: {}, topics: to === null ? state.topics.filter((t) => t !== from) : state.topics.map((t) => (t === from ? to : t)) });
+
+  return (
+    <div className={`deck-status ${deck.status}`}>
+      {deck.status === "generating" ? (
+        <p className="deck-line">
+          <JevBot mood="thinking" size={36} className="float" />
+          <Blink>WRITING MYSTERY QUESTIONS…</Blink>
+        </p>
+      ) : deck.status === "failed" ? (
+        <p className="deck-line glow-pink">
+          <JevBot mood="shocked" size={36} />
+          <span>The question writer isn't answering.</span>
+        </p>
+      ) : (
+        <p className="deck-line">
+          <JevBot mood={deck.ready > 0 ? "happy" : "angry"} size={36} />
+          <span className={deck.ready > 0 ? "glow-green" : "glow-pink"}>
+            {deck.ready === 0
+              ? "NO PLAYABLE QUESTIONS YET"
+              : deck.ready < deck.wanted
+                ? `${deck.ready} OF ${deck.wanted} MYSTERY QUESTIONS READY`
+                : `${deck.ready} MYSTERY QUESTIONS READY`}
+          </span>
+        </p>
+      )}
+      {isHost && deck.status !== "generating" && warnings.length > 0 && (
+        <ul className="deck-warnings" aria-label="Topic warnings">
+          {warnings.map((w) => (
+            <li key={w.topic} className={`deck-warning ${w.status}`}>
+              <p>
+                <Icon name="warn" font="body" /> <b>{w.topic}</b> <span className="tag">{STATUS_LABEL[w.status as keyof typeof STATUS_LABEL]}</span>
+                <span className="muted"> · {w.got}/{w.wanted} questions</span>
+              </p>
+              {w.reason && <p className="small muted">{w.reason}</p>}
+              <div className="row">
+                {w.suggestion && state.topics.every((t) => t.toLowerCase() !== w.suggestion!.toLowerCase()) && (
+                  <PixelButton tone="yellow" onClick={() => replace(w.topic, w.suggestion)}>
+                    TRY "{w.suggestion}"
+                  </PixelButton>
+                )}
+                {w.status === "error" && (
+                  <PixelButton tone="cyan" onClick={() => send({ type: "regenerate" })}>
+                    <Icon name="replay" /> RETRY
+                  </PixelButton>
+                )}
+                {state.topics.length > 1 && (
+                  <PixelButton tone="ghost" onClick={() => replace(w.topic, null)}>
+                    REMOVE
+                  </PixelButton>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {isHost && deck.status === "failed" && warnings.every((w) => w.status !== "error") && (
+        <PixelButton tone="cyan" onClick={() => send({ type: "regenerate" })}>
+          <Icon name="replay" /> RETRY
+        </PixelButton>
+      )}
+    </div>
+  );
+}
 
 export function Lobby({ state, meId, send }: { state: PublicState; meId: string; send: (m: ClientMessage) => void }) {
   const isHost = state.hostId === meId;
   const me = state.players.find((p) => p.id === meId);
   const link = `${location.origin}/r/${state.code}`;
   const [copied, setCopied] = useState(false);
-  const [topicDraft, setTopicDraft] = useState(state.topic);
+  const [topicDraft, setTopicDraft] = useState("");
   const contestants = state.players.filter((p) => p.role === "player");
   const online = contestants.filter((p) => p.connected);
   const spectators = state.players.filter((p) => p.role === "spectator");
 
-  useEffect(() => setTopicDraft(state.topic), [state.topic]);
-
   const share = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: "JEVPARDY!", text: `Join my Jevpardy game: "${state.topic}" — code ${state.code}`, url: link });
+        await navigator.share({ title: "JEVPARDY!", text: `Join my Jevpardy game (${state.topics.join(", ")}) — code ${state.code}`, url: link });
         return;
       }
       await navigator.clipboard.writeText(link);
@@ -52,29 +126,22 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
         </div>
       </Panel>
 
-      <Panel title="TOPIC" accent="pink">
+      <Panel title="TOPICS" accent="pink">
         {isHost ? (
-          <form
-            className="topic-edit"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (topicDraft.trim() !== state.topic) send({ type: "configure", settings: {}, topic: topicDraft });
-            }}
-          >
-            <input className="name-input" value={topicDraft} maxLength={MAX_TOPIC_LENGTH} onChange={(e) => setTopicDraft(e.target.value)} onBlur={() => topicDraft.trim() !== state.topic && send({ type: "configure", settings: {}, topic: topicDraft })} />
-          </form>
+          <TopicEditor
+            topics={state.topics}
+            onChange={(topics) => topics.length > 0 && send({ type: "configure", settings: {}, topics })}
+            draft={topicDraft}
+            onDraft={setTopicDraft}
+          />
         ) : (
-          <p className="topic-big">{state.topic}</p>
+          <TopicList topics={state.topics} />
         )}
-        {state.shortList && (
-          <p className="short-list small" role="note">
-            <Icon name="list" font="body" /> SHORT LIST — Jev reckons this topic has under ~20 answers. When Jev thinks they've all been named, the game ends: BOARD CLEARED!
-          </p>
-        )}
+        <DeckStatus state={state} isHost={isHost} send={send} />
         {isHost ? (
           <div className="lobby-settings">
-            <ModePicker mode={state.settings.mode} onChange={(mode) => send({ type: "configure", settings: { mode } })} />
-            {state.settings.mode === "timed" && <TimedSettings settings={state.settings} onChange={(patch) => send({ type: "configure", settings: patch })} />}
+            <DeckSettings settings={state.settings} onChange={(patch) => send({ type: "configure", settings: patch })} />
+            <TimedSettings settings={state.settings} onChange={(patch) => send({ type: "configure", settings: patch })} />
           </div>
         ) : (
           <p className="small muted">{settingsSummary(state.settings)}</p>
@@ -115,8 +182,14 @@ export function Lobby({ state, meId, send }: { state: PublicState; meId: string;
 
       <div className="lobby-cta">
         {isHost ? (
-          <PixelButton big tone="green" onClick={() => send({ type: "start" })} disabled={online.length === 0}>
-            <Icon name="right" /> START GAME {online.length > 1 ? `(${online.length})` : "(SOLO)"}
+          <PixelButton big tone="green" onClick={() => send({ type: "start" })} disabled={online.length === 0 || state.deck.status !== "ready" || state.deck.ready === 0}>
+            {state.deck.status === "generating" ? (
+              "WRITING QUESTIONS…"
+            ) : (
+              <>
+                <Icon name="right" /> START GAME {online.length > 1 ? `(${online.length})` : "(SOLO)"}
+              </>
+            )}
           </PixelButton>
         ) : (
           <div className="waiting">

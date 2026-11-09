@@ -1,14 +1,14 @@
 import {
   DUPLICATE_QUESTION,
+  EXAMPLE_QUESTION,
+  LISTABLE_QUESTION,
   MAX_DUPLICATE_CANDIDATES,
   OBSCURITY_QUESTION,
-  REMAINING_QUESTION,
-  SHORT_TOPIC_QUESTION,
-  TOPIC_QUESTION,
-  TOPIC_STATE,
+  SHORT_QUESTION,
   VALIDITY_QUESTION,
+  VETTING_STATE,
 } from "./questions.ts";
-import type { Judge, JudgeInput, JudgeOutput, TopicCheck } from "./types.ts";
+import type { Judge, JudgeInput, JudgeOutput, QuestionToVet, Vetting } from "./types.ts";
 
 const DEFAULT_API_URL = "https://api.typesafe.ai";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -93,30 +93,19 @@ export class JevJudge implements Judge {
       valid: VALIDITY_QUESTION,
       obscurity: OBSCURITY_QUESTION,
     };
-    // Past the duplicate cap the board is far too long for the topic to be running dry.
-    const askRemaining = input.askExhausted && input.prior.length <= MAX_DUPLICATE_CANDIDATES;
-    if (askRemaining) {
-      // submitted_answer is repeated here: read from the shared state, this question's score swung 0.25–0.74 on identical input.
-      questions.remaining = {
-        type: "noul",
-        instructions: { accepted_answers: prior.map((p) => p.text), submitted_answer: input.answer, question: REMAINING_QUESTION },
-      };
-    }
     // Speculative fan-out: one Noul per prior answer, all in the same request.
     prior.forEach((p, i) => {
       questions[`dup_${i}`] = { type: "noul", instructions: { previous_answer: p.text, question: DUPLICATE_QUESTION } };
     });
     try {
-      const res = await this.systemOne({ topic: input.topic, submitted_answer: input.answer }, questions, "judge");
+      const res = await this.systemOne({ topic: input.question, submitted_answer: input.answer }, questions, "judge");
       const validity = noul(res.answers, "valid");
       const obscurity = res.answers.obscurity;
-      const remaining = askRemaining ? noul(res.answers, "remaining") : null;
       if (validity === null) return { ok: false, error: "missing validity answer" };
       return {
         ok: true,
         validity,
         obscurity: obscurity?.type === "score" && typeof obscurity.score === "number" ? obscurity.score : 0,
-        exhausted: remaining === null ? 0 : 1 - remaining,
         duplicates: prior.map((p, i) => ({ id: p.id, probability: noul(res.answers, `dup_${i}`) ?? 0 })),
       };
     } catch (err) {
@@ -124,19 +113,27 @@ export class JevJudge implements Judge {
     }
   }
 
-  async checkTopic(topic: string): Promise<TopicCheck | null> {
+  async vetQuestions(list: QuestionToVet[]): Promise<Vetting[] | null> {
+    if (list.length === 0) return [];
+    // Fan-out: listable + short + one validity check per example, for every question, in one request.
+    const questions: Record<string, unknown> = {};
+    list.forEach((q, i) => {
+      questions[`l_${i}`] = { type: "noul", instructions: { topic: q.text, question: LISTABLE_QUESTION } };
+      questions[`s_${i}`] = { type: "noul", instructions: { topic: q.text, question: SHORT_QUESTION } };
+      q.examples.forEach((example, j) => {
+        questions[`e_${i}_${j}`] = { type: "noul", instructions: { topic: q.text, submitted_answer: example, question: EXAMPLE_QUESTION } };
+      });
+    });
     try {
-      const res = await this.systemOne(
-        TOPIC_STATE,
-        {
-          listable: { type: "noul", instructions: { topic, question: TOPIC_QUESTION } },
-          short: { type: "noul", instructions: { topic, question: SHORT_TOPIC_QUESTION } },
-        },
-        "topic",
-      );
-      const listable = noul(res.answers, "listable");
-      const short = noul(res.answers, "short");
-      return listable === null || short === null ? null : { listable, short };
+      const res = await this.systemOne(VETTING_STATE, questions, "vet");
+      return list.map((q, i) => {
+        const examples = q.examples.map((_, j) => noul(res.answers, `e_${i}_${j}`)).filter((n): n is number => n !== null);
+        return {
+          listable: noul(res.answers, `l_${i}`) ?? 1,
+          short: noul(res.answers, `s_${i}`) ?? 0,
+          examples: examples.length > 0 ? examples.reduce((a, b) => a + b, 0) / examples.length : null,
+        };
+      });
     } catch {
       return null;
     }

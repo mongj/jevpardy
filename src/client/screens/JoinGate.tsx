@@ -3,6 +3,7 @@ import { MAX_NAME_LENGTH } from "../../shared/constants.ts";
 import type { RoomInfoResponse } from "../../shared/protocol.ts";
 import { sanitizeName } from "../../shared/sanitize.ts";
 import { Icon, JevBot } from "../components/Pixel.tsx";
+import { TopicList } from "../components/TopicChips.tsx";
 import { Panel, PixelButton } from "../components/ui.tsx";
 import { getSavedName } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
@@ -33,13 +34,13 @@ export function JoinGate({ code, onJoin }: { code: string; onJoin: (name: string
       <Panel accent="yellow" className="join-preview">
         {info?.ok ? (
           <>
-            <p className="label">TOPIC</p>
-            <p className="topic-big">{info.topic}</p>
+            <p className="label">{info.topics.length === 1 ? "TOPIC" : "TOPICS"}</p>
+            <TopicList topics={info.topics} />
             <p className="muted small">
-              <Icon name={info.mode === "timed" ? "stopwatch" : "cup"} font="body" /> {info.mode === "timed" ? "TIMED" : "FREE & EASY"} · {info.players}/{info.maxPlayers} players · {info.phase === "lobby" ? "waiting to start" : info.phase === "playing" ? "in progress" : "finished"}
+              {info.players}/{info.maxPlayers} players · {info.phase === "lobby" ? "waiting to start" : info.phase === "playing" ? "in progress" : "finished"}
             </p>
             {info.phase !== "lobby" && (
-              <p className="small glow-pink">{info.mode === "free" && info.phase === "playing" ? "You can jump straight in!" : "You'll join as a spectator."}</p>
+              <p className="small glow-pink">You'll spectate and join the next game.</p>
             )}
           </>
         ) : (

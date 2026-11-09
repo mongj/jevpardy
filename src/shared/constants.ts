@@ -4,7 +4,7 @@ export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const ROOM_CODE_LENGTH = 4;
 
 export const MAX_NAME_LENGTH = 16;
-export const MAX_TOPIC_LENGTH = 120;
+export const MAX_TOPIC_LENGTH = 60;
 export const MIN_TOPIC_LENGTH = 3;
 /** Topics per room. Questions are spread evenly across them. */
 export const MAX_TOPICS = 5;
@@ -13,10 +13,8 @@ export const MAX_ANSWER_LENGTH = 60;
 export const DEFAULT_MAX_PLAYERS = 12;
 export const MAX_SPECTATORS = 40;
 export const MAX_LIVES = 5;
-/** Timed mode: points that fill the 1UP meter for a bonus life. */
-export const BONUS_LIFE_POINTS = 200;
-/** Given to every player still in when Jev declares the board cleared. */
-export const CLEAR_BONUS_POINTS = 50;
+/** Points that fill the 1UP meter for a bonus life. Games now run many questions, so hearts are earned slower than before. */
+export const BONUS_LIFE_POINTS = 300;
 
 export const MIN_SUBMIT_INTERVAL_MS = 600;
 export const MAX_ATTEMPTS_PER_TURN = 30;
@@ -24,7 +22,23 @@ export const MIN_TYPING_INTERVAL_MS = 80;
 
 export const SPEED_UP_STEP_SECONDS = 1;
 export const SPEED_UP_MIN_SECONDS = 6;
-export const MYSTERY_FUSE_SPREAD = 0.6;
+
+
+// Mystery fuse (Puffer Party style): one hidden fuse shared by the table, measured on krillion.io as
+// 10–30 s with an 8 s floor. Here it scales with the host's "average fuse" T: a fresh fuse burns for
+// T×[0.6, 1.8], passing it on keeps what's left, but never less than the floor.
+export const FUSE_MIN_FACTOR = 0.6;
+export const FUSE_MAX_FACTOR = 1.8;
+export const FUSE_FLOOR_FACTOR = 0.5;
+export const FUSE_FLOOR_MIN_MS = 4_000;
+/** Extra time on the first turn of a new question, so everyone can read it. */
+export const QUESTION_REVEAL_MS = 1_800;
+
+/** Bounds on how many answers one question takes before it's "cleared" (set per question from its answer pool). */
+export const QUESTION_CAP_MIN = 5;
+export const QUESTION_CAP_MAX = 20;
+/** Cap for questions Jev reckons have under ~20 answers in total. */
+export const SHORT_QUESTION_CAP = 6;
 
 export const LOBBY_IDLE_MS = 30 * 60_000;
 export const PLAYING_IDLE_MS = 30 * 60_000;
@@ -32,17 +46,9 @@ export const PLAYING_IDLE_MS = 30 * 60_000;
 export const OVER_TTL_MS = 15 * 60_000;
 /** Empty rooms (nobody connected) are wiped after this. */
 export const EMPTY_ROOM_MS = 5 * 60_000;
-/** Free mode: a disconnected current player is skipped after this. */
-export const FREE_DISCONNECT_GRACE_MS = 20_000;
 /** A disconnected host hands over the crown after this. */
 export const HOST_GRACE_MS = 20_000;
 export const LOG_LIMIT = 30;
-
-/** Bounds on how many answers one question takes before it's "cleared" (set per question from its answer pool). */
-export const QUESTION_CAP_MIN = 5;
-export const QUESTION_CAP_MAX = 20;
-/** Cap for questions Jev reckons have under ~20 answers in total. */
-export const SHORT_QUESTION_CAP = 6;
 
 export interface Tier {
   id: TierId;
@@ -89,17 +95,20 @@ export const PLAYER_COLORS = [
 export const AVATAR_COUNT = 8;
 
 export const DEFAULT_SETTINGS: GameSettings = {
-  mode: "timed",
   lives: 3,
   turnSeconds: 15,
   wrongAnswer: "retry",
-  mysteryFuse: false,
+  mysteryFuse: true,
   speedUp: false,
+  questionCount: 10,
+  roundsPerQuestion: 2,
 };
 
 export const SETTINGS_LIMITS = {
   lives: { min: 1, max: MAX_LIVES },
   turnSeconds: { min: 5, max: 60 },
+  questionCount: { min: 3, max: 30 },
+  roundsPerQuestion: { min: 1, max: 5 },
 } as const;
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -111,11 +120,17 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 export function mergeSettings(base: GameSettings, patch: Partial<GameSettings> | undefined): GameSettings {
   const p: Partial<Record<keyof GameSettings, unknown>> = patch ?? {};
   return {
-    mode: p.mode === "timed" || p.mode === "free" ? p.mode : base.mode,
     lives: clampInt(p.lives, SETTINGS_LIMITS.lives.min, SETTINGS_LIMITS.lives.max, base.lives),
     turnSeconds: clampInt(p.turnSeconds, SETTINGS_LIMITS.turnSeconds.min, SETTINGS_LIMITS.turnSeconds.max, base.turnSeconds),
     wrongAnswer: p.wrongAnswer === "retry" || p.wrongAnswer === "life" ? p.wrongAnswer : base.wrongAnswer,
     mysteryFuse: typeof p.mysteryFuse === "boolean" ? p.mysteryFuse : base.mysteryFuse,
     speedUp: typeof p.speedUp === "boolean" ? p.speedUp : base.speedUp,
+    questionCount: clampInt(p.questionCount, SETTINGS_LIMITS.questionCount.min, SETTINGS_LIMITS.questionCount.max, base.questionCount),
+    roundsPerQuestion: clampInt(
+      p.roundsPerQuestion,
+      SETTINGS_LIMITS.roundsPerQuestion.min,
+      SETTINGS_LIMITS.roundsPerQuestion.max,
+      base.roundsPerQuestion,
+    ),
   };
 }

@@ -46,7 +46,7 @@ export function Home() {
         <Logo />
         <div className="home-jev">
           <JevBot mood="idle" size={88} className="float" />
-          <div className="speech">Pick ANY topic. I'll judge every answer. No repeats!</div>
+          <div className="speech">Pick your topics. You get secret questions; I judge every answer!</div>
         </div>
       </div>
 

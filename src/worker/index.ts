@@ -1,7 +1,7 @@
 import type { CreateRoomRequest, CreateRoomResponse, HealthResponse, RoomInfoResponse } from "../shared/protocol.ts";
-import { sanitizeTopic } from "../shared/sanitize.ts";
+import { sanitizeTopics } from "../shared/sanitize.ts";
 import { createJudge } from "./judge/index.ts";
-import { SHORT_TOPIC_THRESHOLD, TOPIC_WARNING_THRESHOLD } from "./judge/questions.ts";
+import { createGenerator } from "./questions/index.ts";
 import { ROOM_CODE_PATTERN, log, randomRoomCode } from "./util.ts";
 
 export { GameRoom } from "./room.ts";
@@ -31,24 +31,14 @@ async function createRoomHandler(request: Request, env: Env): Promise<Response> 
   if (!body || typeof body !== "object" || typeof body.token !== "string" || !TOKEN_PATTERN.test(body.token)) {
     return json<CreateRoomResponse>({ ok: false, error: "bad_request", message: "Malformed request." }, 400);
   }
-  const topic = sanitizeTopic(body.topic);
-  if (!topic) return json<CreateRoomResponse>({ ok: false, error: "bad_topic", message: "Give Jev a topic (3+ characters)." }, 400);
+  const topics = sanitizeTopics(body.topics);
+  if (!topics) return json<CreateRoomResponse>({ ok: false, error: "bad_topic", message: "Give Jev at least one topic (3+ characters)." }, 400);
 
-  const check = await createJudge(env).checkTopic(topic);
-  if (!body.force && check && check.listable < TOPIC_WARNING_THRESHOLD) {
-    return json<CreateRoomResponse>({
-      ok: false,
-      error: "topic_warning",
-      listability: check.listable,
-      message: "Jev isn't sure players can name many examples of that. Play it anyway?",
-    });
-  }
-  const shortList = check ? check.short >= SHORT_TOPIC_THRESHOLD : null;
-
+  // Questions are written in the background by the room; the host goes straight to the lobby.
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
     const code = randomRoomCode();
     const stub = env.GAME_ROOM.getByName(code);
-    const created = await stub.create({ code, topic, settings: body.settings ?? {}, hostToken: body.token, shortList });
+    const created = await stub.create({ code, topics, settings: body.settings ?? {}, hostToken: body.token });
     if (created.ok) return json<CreateRoomResponse>({ ok: true, code });
   }
   log("error", "room.code_exhausted");
@@ -63,7 +53,8 @@ export default {
     try {
       if (path === "/api/health") {
         const judge = createJudge(env);
-        return json<HealthResponse>({ ok: true, judge: judge.kind, model: judge.model });
+        const generator = createGenerator(env);
+        return json<HealthResponse>({ ok: true, judge: judge.kind, model: judge.model, generator: generator.kind, generatorModel: generator.model });
       }
       if (path === "/api/rooms" && request.method === "POST") return await createRoomHandler(request, env);
 
