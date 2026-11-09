@@ -119,6 +119,7 @@ export class OpenAIGenerator implements QuestionGenerator {
   private readonly apiKey: string;
   private readonly reasoningEffort: string;
 
+  // Plain fields (no parameter properties) so scripts can import this under Node's type stripping.
   constructor(apiKey: string, model: string, reasoningEffort: string) {
     this.apiKey = apiKey;
     this.model = model;

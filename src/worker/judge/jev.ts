@@ -37,13 +37,14 @@ function sleep(ms: number): Promise<void> {
 export class JevJudge implements Judge {
   readonly kind = "jev";
   readonly model: string;
+  private readonly apiKey: string;
+  private readonly apiUrl: string;
 
-  constructor(
-    private readonly apiKey: string,
-    model: string,
-    private readonly apiUrl: string = DEFAULT_API_URL,
-  ) {
+  // Plain fields (no parameter properties) so scripts can import this under Node's type stripping.
+  constructor(apiKey: string, model: string, apiUrl: string = DEFAULT_API_URL) {
+    this.apiKey = apiKey;
     this.model = model;
+    this.apiUrl = apiUrl;
   }
 
   private async systemOne(state: unknown, questions: Record<string, unknown>, purpose: string): Promise<SystemOneResponse> {
@@ -59,7 +60,7 @@ export class JevJudge implements Judge {
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (res.ok) {
-          const json = await res.json<SystemOneResponse>();
+          const json = (await res.json()) as SystemOneResponse;
           console.log(
             JSON.stringify({
               level: "info",
