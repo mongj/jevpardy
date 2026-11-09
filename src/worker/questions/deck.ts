@@ -3,10 +3,12 @@
 import { QUESTION_CAP_MAX, QUESTION_CAP_MIN, SHORT_QUESTION_CAP } from "../../shared/constants.ts";
 import type { TopicReport } from "../../shared/protocol.ts";
 import { normalizeAnswer, topicKey } from "../../shared/sanitize.ts";
-import type { GenerateRequest, GeneratedBatch, QuestionCandidate, TopicPool } from "./types.ts";
+import type { GenerateRequest, GeneratedBatch, QuestionCandidate, Review, TopicPool } from "./types.ts";
 
-/** Spare questions asked for per topic, so weak ones can be dropped and rematches have fresh material. */
+/** Spare questions asked for per topic, so duds can be cut and rematches have fresh material. */
 export const EXTRA_PER_TOPIC = 3;
+/** The writer is asked for this many times a topic's share (plus spares): the reviewer cuts a lot. */
+export const OVERWRITE_FACTOR = 2;
 /** Batches per topic before we stop asking (bounds the cost of a topic that keeps coming up short). */
 export const MAX_BATCHES = 3;
 /** Jev's P(short list) at or above which a question gets the small cap and sorts last. */
@@ -46,8 +48,11 @@ export function questionCap(c: Pick<QuestionCandidate, "pool" | "short">): numbe
 function usable(pool: TopicPool | undefined, avoid: Set<string>): QuestionCandidate[] {
   if (!pool || pool.error || pool.verdict === "unusable") return [];
   const ranked = pool.candidates.filter((c) => !avoid.has(normalizeAnswer(c.text)));
-  // Short lists sort last (stable, so the writer's own order is kept otherwise).
-  return ranked.map((c, i) => ({ c, i, s: c.short !== null && c.short >= SHORT_THRESHOLD ? 1 : 0 })).sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.c);
+  // Most fun first, short lists last; otherwise the writer's own order.
+  return ranked
+    .map((c, i) => ({ c, i, s: c.short !== null && c.short >= SHORT_THRESHOLD ? 1 : 0, f: c.fun ?? 3 }))
+    .sort((a, b) => a.s - b.s || b.f - a.f || a.i - b.i)
+    .map((x) => x.c);
 }
 
 export interface PlanInput {
@@ -73,7 +78,7 @@ export function topicsToGenerate({ topics, pools, count, played }: PlanInput): G
   const requests: GenerateRequest[] = [];
   topics.forEach((topic, i) => {
     const pool = byKey.get(topicKey(topic));
-    const want = shares[i]! + EXTRA_PER_TOPIC;
+    const want = shares[i]! * OVERWRITE_FACTOR + EXTRA_PER_TOPIC;
     const otherTopics = topics.filter((_, j) => j !== i);
     if (!pool || (pool.error && pool.candidates.length === 0)) {
       requests.push({ topic, count: want, avoid: avoidTexts(pool, played), otherTopics });
@@ -106,6 +111,16 @@ export function applyVetting(candidates: QuestionCandidate[], vetting: (Vetting 
     out.push({ ...c, short: v.short });
   });
   return out;
+}
+
+/** Applies the reviewer: cuts duds, records fun. Without reviews (reviewer down), everything stays. */
+export function applyReview(candidates: QuestionCandidate[], reviews: Review[] | null): QuestionCandidate[] {
+  if (!reviews) return candidates;
+  return candidates.flatMap((c, i) => {
+    const r = reviews[i];
+    if (!r) return [c];
+    return r.verdict === "cut" ? [] : [{ ...c, fun: r.fun }];
+  });
 }
 
 /** Folds a new batch into a topic's pool (or starts one). */

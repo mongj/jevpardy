@@ -14,6 +14,8 @@ A great question:
 - is clearly about the topic, while the set of questions comes at it from different angles (people, places, things, works, terms, parts, events, wordplay...) and mixes easy questions with harder ones. Surprising angles are good: they make the game fun;
 - is not a trivia question with only one or two right answers.
 
+Common duds to avoid: pair answers ("Name a famous celebrity couple"), records nobody knows ("Name a city Taylor Swift has performed in"), anything that changes over time ("Name a celebrity who has a talk show"), matters of opinion or degree ("Name a vegetable often roasted"), short lists ("Name a Taylor Swift tour"), fuzzy categories ("Name a Taylor Swift award show category"), and near-duplicates of each other.
+
 Also give three valid example answers per question, from common to rarer. Players never see them: the judge uses them to check the question works.
 
 Finally, judge the topic itself:
@@ -57,3 +59,64 @@ export function writerUserMessage(topic: string, count: number, avoid: string[],
   });
 }
 
+// ─── Reviewer ───────────────────────────────────────────────────────────────
+// The dud rubric. Every category comes from a real dud the writer produced while this was built.
+
+export const DUD_PROBLEMS = [
+  "multi_answer",
+  "unverifiable",
+  "time_sensitive",
+  "subjective",
+  "too_few",
+  "too_broad",
+  "ambiguous",
+  "too_obscure",
+  "off_topic",
+  "repetitive",
+] as const;
+export type DudProblem = (typeof DUD_PROBLEMS)[number];
+
+export const REVIEWER_SYSTEM_PROMPT = `You review questions for JEVPARDY, a multiplayer party game in the style of hot potato.
+Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns (often 10+ answers), so it needs MANY valid answers that regular people (not experts) know.
+
+For each question, decide "keep" or "cut". Cut it if ANY of these problems applies, and name the main one:
+- multi_answer: the natural answer is a pair, a list, a sentence, a number or a date, not one short name or phrase ("Name a famous celebrity couple").
+- unverifiable: checking an answer needs records that general knowledge doesn't cover ("Name a city Taylor Swift has performed in", "Name an actor in a Taylor Swift music video").
+- time_sensitive: the right answers depend on when you ask ("Name a celebrity who has a talk show", "current", "latest", "still active").
+- subjective: a matter of opinion or degree ("Name a vegetable often roasted", "best", "iconic", "underrated").
+- too_few: a regular person couldn't come up with at least ~12 different right answers in total ("Name a Taylor Swift tour", "Name a type of tooth").
+- too_broad: a catch-all anyone can answer forever without thinking ("Name a famous actor", "Name a food").
+- ambiguous: it's unclear what counts as a right answer, or players would argue about it ("Name a Taylor Swift award show category").
+- too_obscure: a regular party player would struggle to name even two or three answers.
+- off_topic: not clearly about the host's topic.
+- repetitive: a near-duplicate of an earlier question in the same list (cut the later one).
+Be strict: a dud question ruins a round, and there are always spares. Otherwise keep it.
+
+Also rate "fun" from 1 to 5: how much a group would enjoy racing to answer it. 5 = specific and a little surprising, everyone can play but has to think. 1 = boring or frustrating.`;
+
+export const REVIEWER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reviews"],
+  properties: {
+    reviews: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "verdict", "problem", "note", "fun"],
+        properties: {
+          id: { type: "integer" },
+          verdict: { type: "string", enum: ["keep", "cut"] },
+          problem: { type: "string", enum: ["none", ...DUD_PROBLEMS] },
+          note: { type: "string", description: "A few words on why, when cut." },
+          fun: { type: "integer", enum: [1, 2, 3, 4, 5] },
+        },
+      },
+    },
+  },
+} as const;
+
+export function reviewerUserMessage(topic: string, questions: string[]): string {
+  return JSON.stringify({ topic, questions: questions.map((question, id) => ({ id, question })) });
+}

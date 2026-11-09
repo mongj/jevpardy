@@ -10,6 +10,8 @@ interface __BaseEnv_Env {
 	GENERATOR_MODE: string;
 	OPENAI_MODEL: string;
 	OPENAI_REASONING_EFFORT: string;
+	REVIEWER_MODEL: string;
+	REVIEWER_REASONING_EFFORT: string;
 	TYPESAFE_API_KEY: string;
 	OPENAI_API_KEY: string;
 	GAME_ROOM: DurableObjectNamespace<import("./src/worker/index").GameRoom>;
@@ -26,7 +28,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "JUDGE_MODE" | "JEV_MODEL" | "ACCEPT_THRESHOLD" | "DUPLICATE_THRESHOLD" | "MAX_PLAYERS" | "GENERATOR_MODE" | "OPENAI_MODEL" | "OPENAI_REASONING_EFFORT" | "TYPESAFE_API_KEY" | "OPENAI_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "JUDGE_MODE" | "JEV_MODEL" | "ACCEPT_THRESHOLD" | "DUPLICATE_THRESHOLD" | "MAX_PLAYERS" | "GENERATOR_MODE" | "OPENAI_MODEL" | "OPENAI_REASONING_EFFORT" | "REVIEWER_MODEL" | "REVIEWER_REASONING_EFFORT" | "TYPESAFE_API_KEY" | "OPENAI_API_KEY">> {}
 }
 declare module "*.txt" {
 	const value: string;

@@ -14,6 +14,8 @@ export interface QuestionCandidate {
   examples: string[];
   /** Jev's P(the question has fewer than ~20 answers). Null when it wasn't vetted. */
   short: number | null;
+  /** The reviewer's 1–5 fun rating. Null when it wasn't reviewed. */
+  fun: number | null;
 }
 
 /** Everything the writer produced for one topic, cached in the room so edits only regenerate what changed. */
@@ -46,6 +48,21 @@ export interface GeneratedBatch {
   reason: string | null;
   suggestion: string | null;
   candidates: QuestionCandidate[];
+}
+
+export interface Review {
+  verdict: "keep" | "cut";
+  /** "none", or the dud category (see DUD_PROBLEMS). */
+  problem: string;
+  note: string;
+  fun: number;
+}
+
+/** Second opinion on freshly written questions: cuts duds and rates fun. */
+export interface QuestionReviewer {
+  readonly model: string | null;
+  /** One review per question, in order. Null when the reviewer is unavailable (questions are then kept). */
+  review(topic: string, questions: string[]): Promise<Review[] | null>;
 }
 
 export interface QuestionGenerator {

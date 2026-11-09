@@ -34,9 +34,9 @@ import { MAX_ANSWER_LENGTH, MIN_TYPING_INTERVAL_MS } from "../shared/constants.t
 import { topicKey } from "../shared/sanitize.ts";
 import { createJudge, thresholdsFromEnv } from "./judge/index.ts";
 import type { Judge } from "./judge/types.ts";
-import { applyVetting, failedPool, mergeBatch } from "./questions/deck.ts";
-import { createGenerator } from "./questions/index.ts";
-import type { GenerateRequest, QuestionGenerator, TopicPool } from "./questions/types.ts";
+import { applyReview, applyVetting, failedPool, mergeBatch } from "./questions/deck.ts";
+import { createGenerator, createReviewer } from "./questions/index.ts";
+import type { GenerateRequest, QuestionGenerator, QuestionReviewer, TopicPool } from "./questions/types.ts";
 import { log, randomId } from "./util.ts";
 
 const STORAGE_KEY = "room";
@@ -58,6 +58,7 @@ export class GameRoom extends DurableObject<Env> {
   private room: RoomState | null;
   private readonly judge: Judge;
   private readonly generator: QuestionGenerator;
+  private readonly reviewer: QuestionReviewer;
   private readonly lastTypingAt = new Map<string, number>();
   /** The deck-writing job in flight, if any; edits made meanwhile set `deckDirty` so it runs again. */
   private writing: Promise<void> | null = null;
@@ -67,6 +68,7 @@ export class GameRoom extends DurableObject<Env> {
     super(ctx, env);
     this.judge = createJudge(env);
     this.generator = createGenerator(env);
+    this.reviewer = createReviewer(env);
     // Answered by the runtime without waking the object.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     const stored = ctx.storage.kv.get<RoomState>(STORAGE_KEY) ?? null;
@@ -303,13 +305,18 @@ export class GameRoom extends DurableObject<Env> {
     await this.commit([]);
   }
 
-  /** Writes and vets one topic's questions. Never throws: a failure becomes an errored pool. */
+  /** Writes, vets (Jev) and reviews (dud rubric) one topic's questions. Never throws: a failure becomes an errored pool. */
   private async writeTopic(room: RoomState, req: GenerateRequest): Promise<TopicPool> {
     const previous = room.pools.find((p) => p.key === topicKey(req.topic));
     try {
       const batch = await this.generator.generate(req);
       const vetting = await this.judge.vetQuestions(batch.candidates.map((c) => ({ text: c.text, examples: c.examples })));
-      return mergeBatch(previous, req.topic, req.count, { ...batch, candidates: applyVetting(batch.candidates, vetting) });
+      const vetted = applyVetting(batch.candidates, vetting);
+      // The reviewer sees the topic's earlier questions too, so it can cut near-duplicates of them.
+      const earlier = previous?.candidates.map((c) => c.text) ?? [];
+      const reviews = await this.reviewer.review(req.topic, [...earlier, ...vetted.map((c) => c.text)]);
+      const kept = applyReview(vetted, reviews ? reviews.slice(earlier.length) : null);
+      return mergeBatch(previous, req.topic, req.count, { ...batch, candidates: kept });
     } catch (err) {
       return failedPool(previous, req.topic, err instanceof Error ? err.message : String(err));
     }

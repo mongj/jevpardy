@@ -36,7 +36,7 @@ export class MockGenerator implements QuestionGenerator {
       const lap = Math.floor(i / ANGLES.length);
       const text = ANGLES[i % ANGLES.length]!.replace("{t}", subject) + (lap > 0 ? ` (part ${lap + 1})` : "");
       if (avoid.has(text.toLowerCase())) continue;
-      candidates.push({ text, topic: req.topic, pool: 30, difficulty: 1 + (i % 3), examples: ["alpha", "bravo", "charlie"], short: null });
+      candidates.push({ text, topic: req.topic, pool: 30, difficulty: 1 + (i % 3), examples: ["alpha", "bravo", "charlie"], short: null, fun: null });
     }
     const thin = Number.isFinite(limit);
     return {

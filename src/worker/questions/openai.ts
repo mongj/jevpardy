@@ -1,6 +1,6 @@
 import { normalizeAnswer } from "../../shared/sanitize.ts";
-import { WRITER_SCHEMA, WRITER_SYSTEM_PROMPT, writerUserMessage } from "./prompt.ts";
-import type { GenerateRequest, GeneratedBatch, QuestionCandidate, QuestionGenerator, TopicVerdict } from "./types.ts";
+import { REVIEWER_SCHEMA, REVIEWER_SYSTEM_PROMPT, WRITER_SCHEMA, WRITER_SYSTEM_PROMPT, reviewerUserMessage, writerUserMessage } from "./prompt.ts";
+import type { GenerateRequest, GeneratedBatch, QuestionCandidate, QuestionGenerator, QuestionReviewer, Review, TopicVerdict } from "./types.ts";
 
 const API_URL = "https://api.openai.com/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -47,6 +47,7 @@ export function parseWriterOutput(raw: unknown, req: GenerateRequest): Generated
       difficulty: Math.min(3, Math.max(1, Math.round(Number(q.difficulty) || 2))),
       examples: (Array.isArray(q.examples) ? q.examples : []).map((e) => clip(e, 60)).filter((e): e is string => !!e).slice(0, 3),
       short: null,
+      fun: null,
     });
   }
   return {
@@ -155,6 +156,63 @@ export class OpenAIGenerator implements QuestionGenerator {
       const error = err instanceof Error ? err.message : String(err);
       console.error(JSON.stringify({ level: "error", message: "writer.failed", topic: req.topic, error }));
       throw err;
+    }
+  }
+}
+
+/** Matches reviews back to questions by id; anything the reviewer skipped is kept. Exported for tests. */
+export function parseReviewerOutput(raw: unknown, count: number): Review[] {
+  const list = (raw as { reviews?: unknown } | null)?.reviews;
+  if (!Array.isArray(list)) throw new Error("reviewer returned no reviews array");
+  return Array.from({ length: count }, (_, id) => {
+    const r = list.find((x) => (x as { id?: unknown })?.id === id) as Partial<Review> | undefined;
+    if (!r || (r.verdict !== "keep" && r.verdict !== "cut")) return { verdict: "keep", problem: "unreviewed", note: "", fun: 3 };
+    return { verdict: r.verdict, problem: String(r.problem ?? "none"), note: String(r.note ?? "").slice(0, 200), fun: Math.min(5, Math.max(1, Number(r.fun) || 3)) };
+  });
+}
+
+/** Reviews a topic's questions against the dud rubric. */
+export class OpenAIReviewer implements QuestionReviewer {
+  readonly model: string;
+  private readonly apiKey: string;
+  private readonly reasoningEffort: string;
+
+  constructor(apiKey: string, model: string, reasoningEffort: string) {
+    this.apiKey = apiKey;
+    this.model = model;
+    this.reasoningEffort = reasoningEffort;
+  }
+
+  async review(topic: string, questions: string[]): Promise<Review[] | null> {
+    if (questions.length === 0) return [];
+    try {
+      const { content, ms, usage } = await structuredChat(
+        this.apiKey,
+        this.model,
+        this.reasoningEffort,
+        REVIEWER_SYSTEM_PROMPT,
+        reviewerUserMessage(topic, questions),
+        "jevpardy_review",
+        REVIEWER_SCHEMA,
+      );
+      const reviews = parseReviewerOutput(content, questions.length);
+      console.log(
+        JSON.stringify({
+          level: "info",
+          message: "reviewer.call",
+          model: this.model,
+          topic,
+          questions: questions.length,
+          cut: reviews.filter((r) => r.verdict === "cut").map((r) => r.problem),
+          ms,
+          outputTokens: usage?.completion_tokens,
+        }),
+      );
+      return reviews;
+    } catch (err) {
+      // A missing second opinion shouldn't block the game: the questions were already vetted by Jev.
+      console.error(JSON.stringify({ level: "error", message: "reviewer.failed", topic, error: err instanceof Error ? err.message : String(err) }));
+      return null;
     }
   }
 }

@@ -1,9 +1,20 @@
 import { MockGenerator } from "./mock.ts";
-import { OpenAIGenerator } from "./openai.ts";
-import type { QuestionGenerator } from "./types.ts";
+import { OpenAIGenerator, OpenAIReviewer } from "./openai.ts";
+import type { QuestionGenerator, QuestionReviewer } from "./types.ts";
 
 export const DEFAULT_WRITER_MODEL = "gpt-5.4-mini";
 export const DEFAULT_WRITER_EFFORT = "low";
+export const DEFAULT_REVIEWER_MODEL = "gpt-5.4-mini";
+export const DEFAULT_REVIEWER_EFFORT = "low";
+
+const NO_REVIEWER: QuestionReviewer = { model: null, review: async () => null };
+
+/** Cuts dud questions with OpenAI; with the mock writer (or no key) there's nothing to review. */
+export function createReviewer(env: Env): QuestionReviewer {
+  const key = env.OPENAI_API_KEY?.trim();
+  if (env.GENERATOR_MODE === "mock" || !key) return NO_REVIEWER;
+  return new OpenAIReviewer(key, env.REVIEWER_MODEL || DEFAULT_REVIEWER_MODEL, env.REVIEWER_REASONING_EFFORT ?? DEFAULT_REVIEWER_EFFORT);
+}
 
 let warnedMock = false;
 

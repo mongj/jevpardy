@@ -47,7 +47,7 @@ const ACCEPT: Decision = { accepted: true, reason: null, duplicateOf: null, conf
 const REJECT: Decision = { accepted: false, reason: "invalid", duplicateOf: null, confidence: 0.1, tier: "basic" };
 
 function candidate(text: string, pool = 50, difficulty = 1, short: number | null = null): QuestionCandidate {
-  return { text, topic: "Europe", pool, difficulty, examples: [], short };
+  return { text, topic: "Europe", pool, difficulty, examples: [], short, fun: null };
 }
 
 /** Gives the room a written deck of `count` questions without any I/O. */

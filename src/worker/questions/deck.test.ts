@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { QUESTION_CAP_MAX, QUESTION_CAP_MIN, SHORT_QUESTION_CAP } from "../../shared/constants.ts";
-import { EXTRA_PER_TOPIC, MAX_BATCHES, applyVetting, buildDeck, failedPool, mergeBatch, questionCap, topicShares, topicsToGenerate } from "./deck.ts";
+import { EXTRA_PER_TOPIC, MAX_BATCHES, OVERWRITE_FACTOR, applyReview, applyVetting, buildDeck, failedPool, mergeBatch, questionCap, topicShares, topicsToGenerate } from "./deck.ts";
 import { MockGenerator } from "./mock.ts";
-import { parseWriterOutput } from "./openai.ts";
+import { parseReviewerOutput, parseWriterOutput } from "./openai.ts";
 import type { GeneratedBatch, QuestionCandidate, TopicPool } from "./types.ts";
 
 function q(text: string, topic: string, extra: Partial<QuestionCandidate> = {}): QuestionCandidate {
-  return { text, topic, pool: 40, difficulty: 2, examples: ["a", "b", "c"], short: null, ...extra };
+  return { text, topic, pool: 40, difficulty: 2, examples: ["a", "b", "c"], short: null, fun: null, ...extra };
 }
 
 function pool(topic: string, texts: string[], extra: Partial<GeneratedBatch> = {}, asked = texts.length): TopicPool {
@@ -87,7 +87,7 @@ describe("buildDeck", () => {
 describe("topicsToGenerate", () => {
   it("asks for missing topics with spares, telling the writer about the others", () => {
     const reqs = topicsToGenerate({ topics: ["A", "B"], pools: [pool("A", ["Name A1", "Name A2", "Name A3"])], count: 4, played: [] });
-    expect(reqs).toEqual([{ topic: "B", count: 2 + EXTRA_PER_TOPIC, avoid: [], otherTopics: ["A"] }]);
+    expect(reqs).toEqual([{ topic: "B", count: 2 * OVERWRITE_FACTOR + EXTRA_PER_TOPIC, avoid: [], otherTopics: ["A"] }]);
   });
 
   it("tops up a pool that could have done better, but not a genuinely thin one", () => {
@@ -110,7 +110,7 @@ describe("topicsToGenerate", () => {
   it("hands an unusable topic's share to the others", () => {
     const nope = pool("Nope", [], { verdict: "unusable" });
     const a = pool("A", ["Name A1", "Name A2", "Name A3", "Name A4", "Name A5"], {}, 5);
-    expect(topicsToGenerate({ topics: ["Nope", "A"], pools: [nope, a], count: 8, played: [] })).toMatchObject([{ topic: "A", count: 8 + EXTRA_PER_TOPIC - 5 }]);
+    expect(topicsToGenerate({ topics: ["Nope", "A"], pools: [nope, a], count: 8, played: [] })).toMatchObject([{ topic: "A", count: 8 * OVERWRITE_FACTOR + EXTRA_PER_TOPIC - 5 }]);
   });
 
   it("retries a failed topic and passes played questions to avoid", () => {
@@ -133,6 +133,29 @@ describe("vetting and merging", () => {
       ["Name unvetted", null],
     ]);
     expect(applyVetting(cands, null)).toBe(cands);
+  });
+
+  it("cuts what the reviewer cuts, records fun, and keeps everything if the reviewer is down", () => {
+    const cands = [q("Name a dud", "A"), q("Name a gem", "A"), q("Name unreviewed", "A")];
+    const out = applyReview(cands, [
+      { verdict: "cut", problem: "too_few", note: "", fun: 2 },
+      { verdict: "keep", problem: "none", note: "", fun: 5 },
+    ]);
+    expect(out.map((c) => [c.text, c.fun])).toEqual([
+      ["Name a gem", 5],
+      ["Name unreviewed", null],
+    ]);
+    expect(applyReview(cands, null)).toBe(cands);
+  });
+
+  it("deals the most fun questions first", () => {
+    const a = mergeBatch(undefined, "A", 3, {
+      verdict: "great",
+      reason: null,
+      suggestion: null,
+      candidates: [q("Name meh", "A", { fun: 3 }), q("Name great", "A", { fun: 5 }), q("Name ok", "A", { fun: 4 })],
+    });
+    expect(buildDeck({ topics: ["A"], pools: [a], count: 2, played: [], rng }).questions.map((x) => x.text)).toEqual(["Name great", "Name ok"]);
   });
 
   it("merges batches without duplicates and keeps a productive topic usable", () => {
@@ -173,6 +196,28 @@ describe("parseWriterOutput", () => {
     );
     expect(batch).toMatchObject({ verdict: "unusable", reason: "That's private.", suggestion: "Cats", candidates: [] });
     expect(() => parseWriterOutput({ nope: true }, req)).toThrow();
+  });
+});
+
+describe("parseReviewerOutput", () => {
+  it("matches reviews by id and keeps anything skipped or malformed", () => {
+    const out = parseReviewerOutput(
+      {
+        reviews: [
+          { id: 1, verdict: "cut", problem: "subjective", note: "opinion", fun: 2 },
+          { id: 0, verdict: "keep", problem: "none", note: "", fun: 9 },
+          { id: 2, verdict: "maybe", problem: "none", note: "", fun: 3 },
+        ],
+      },
+      4,
+    );
+    expect(out.map((r) => [r.verdict, r.problem, r.fun])).toEqual([
+      ["keep", "none", 5],
+      ["cut", "subjective", 2],
+      ["keep", "unreviewed", 3],
+      ["keep", "unreviewed", 3],
+    ]);
+    expect(() => parseReviewerOutput({}, 1)).toThrow();
   });
 });
 
