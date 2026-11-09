@@ -135,6 +135,24 @@ export interface PublicState {
 }
 
 export type JudgeKind = "jev" | "mock";
+export type GeneratorKind = "openai" | "mock";
+
+/** ok: enough good questions. thin: fewer than its share (other topics fill in). unusable: none. error: the writer failed. */
+export type TopicStatus = "ok" | "thin" | "unusable" | "error";
+
+export interface TopicReport {
+  topic: string;
+  status: TopicStatus;
+  /** This topic's share of the deck. */
+  wanted: number;
+  /** Questions it actually has in the deck. */
+  got: number;
+  /** A short note for the host when the topic is thin or unusable. */
+  reason: string | null;
+  /** A broader topic to try instead. */
+  suggestion: string | null;
+}
+
 
 export type LifeLostReason = "timeout" | "wrong" | "duplicate";
 

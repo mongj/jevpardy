@@ -6,6 +6,8 @@ export const ROOM_CODE_LENGTH = 4;
 export const MAX_NAME_LENGTH = 16;
 export const MAX_TOPIC_LENGTH = 120;
 export const MIN_TOPIC_LENGTH = 3;
+/** Topics per room. Questions are spread evenly across them. */
+export const MAX_TOPICS = 5;
 export const MAX_ANSWER_LENGTH = 60;
 
 export const DEFAULT_MAX_PLAYERS = 12;
@@ -35,6 +37,12 @@ export const FREE_DISCONNECT_GRACE_MS = 20_000;
 /** A disconnected host hands over the crown after this. */
 export const HOST_GRACE_MS = 20_000;
 export const LOG_LIMIT = 30;
+
+/** Bounds on how many answers one question takes before it's "cleared" (set per question from its answer pool). */
+export const QUESTION_CAP_MIN = 5;
+export const QUESTION_CAP_MAX = 20;
+/** Cap for questions Jev reckons have under ~20 answers in total. */
+export const SHORT_QUESTION_CAP = 6;
 
 export interface Tier {
   id: TierId;
