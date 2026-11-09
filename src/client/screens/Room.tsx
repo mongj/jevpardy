@@ -150,7 +150,7 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
               vibrate([90, 40, 90]);
             }
             f?.burst({
-              text: e.reason === "timeout" ? "TIME'S UP!" : <>-1 <Icon name="heart" className="heart-glyph" /></>,
+              text: "TIME'S UP!",
               sub: (
                 <>
                   {e.playerId === meId ? "YOU" : nameOf(e.playerId)} · {e.livesLeft} <Icon name="heart" font="body" className="heart-glyph" /> LEFT
@@ -176,10 +176,6 @@ function LiveRoom({ code, name, onWarp }: { code: string; name: string; onWarp: 
             break;
           case "skipped":
             f?.burst({ text: "SKIP", sub: nameOf(e.playerId), color: "var(--dim)", kind: "float" });
-            break;
-          case "speedUp":
-            sfx.speedUp();
-            f?.burst({ text: "SPEED UP!", sub: `${e.turnSeconds}s turns`, color: "var(--cyan)", kind: "pop" });
             break;
           case "gameOver": {
             const won = e.winnerId === meId;

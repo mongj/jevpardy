@@ -161,8 +161,6 @@ function describe(e: GameEvent, s: PublicState): string | null {
       return `    ☠ ${name(e.playerId)} ELIMINATED`;
     case "skipped":
       return `    ⏭ ${name(e.playerId)} skipped`;
-    case "speedUp":
-      return `    ⚡ speed up: ${e.turnSeconds}s`;
     case "gameOver":
       return `■ GAME OVER (${e.reason}) — winner: ${e.winnerId ? name(e.winnerId) : "nobody"}`;
     case "backToLobby":
@@ -221,7 +219,7 @@ function attachLogger(observer: Bot): void {
 async function runTimed(): Promise<string[]> {
   console.log("\n\x1b[1m=== TIMED MODE (3 bots, 2 lives, 6s turns, 5 questions × 2 rounds) ===\x1b[0m");
   const host = new Bot("", { name: "AceBot", strategy: "ace", pool: GOOD });
-  const code = await createRoom({ lives: 2, turnSeconds: 6, mysteryFuse: false, wrongAnswer: "retry", questionCount: 5, roundsPerQuestion: 2 }, host.token);
+  const code = await createRoom({ lives: 2, turnSeconds: 6, mysteryFuse: false, questionCount: 5, roundsPerQuestion: 2 }, host.token);
   console.log(`room ${code} — ${BASE}/r/${code}`);
   host.code = code;
   const bots = [

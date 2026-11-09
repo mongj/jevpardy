@@ -20,9 +20,6 @@ export const MIN_SUBMIT_INTERVAL_MS = 600;
 export const MAX_ATTEMPTS_PER_TURN = 30;
 export const MIN_TYPING_INTERVAL_MS = 80;
 
-export const SPEED_UP_STEP_SECONDS = 1;
-export const SPEED_UP_MIN_SECONDS = 6;
-
 
 // Mystery fuse (Puffer Party style): one hidden fuse shared by the table, measured on krillion.io as
 // 10–30 s with an 8 s floor. Here it scales with the host's "average fuse" T: a fresh fuse burns for
@@ -97,9 +94,7 @@ export const AVATAR_COUNT = 8;
 export const DEFAULT_SETTINGS: GameSettings = {
   lives: 3,
   turnSeconds: 15,
-  wrongAnswer: "retry",
   mysteryFuse: true,
-  speedUp: false,
   questionCount: 10,
   roundsPerQuestion: 2,
 };
@@ -122,9 +117,7 @@ export function mergeSettings(base: GameSettings, patch: Partial<GameSettings> |
   return {
     lives: clampInt(p.lives, SETTINGS_LIMITS.lives.min, SETTINGS_LIMITS.lives.max, base.lives),
     turnSeconds: clampInt(p.turnSeconds, SETTINGS_LIMITS.turnSeconds.min, SETTINGS_LIMITS.turnSeconds.max, base.turnSeconds),
-    wrongAnswer: p.wrongAnswer === "retry" || p.wrongAnswer === "life" ? p.wrongAnswer : base.wrongAnswer,
     mysteryFuse: typeof p.mysteryFuse === "boolean" ? p.mysteryFuse : base.mysteryFuse,
-    speedUp: typeof p.speedUp === "boolean" ? p.speedUp : base.speedUp,
     questionCount: clampInt(p.questionCount, SETTINGS_LIMITS.questionCount.min, SETTINGS_LIMITS.questionCount.max, base.questionCount),
     roundsPerQuestion: clampInt(
       p.roundsPerQuestion,

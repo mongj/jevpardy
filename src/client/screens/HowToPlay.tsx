@@ -16,7 +16,7 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <li>No repeats on the same question! "München" after "Munich" counts as a repeat.</li>
           <li>A question moves on after a few rounds, once it's had plenty of answers, or as soon as it stumps people. It never comes back to someone it already beat.</li>
           <li>
-            Answer before the fuse pops or lose a <Icon name="heart" font="body" className="heart-glyph" />. With the <i>mystery fuse</i>, one hidden fuse is passed round the table: answer fast and the next player inherits what's left. Wrong answers just burn time (unless the host turns on <i>sudden death</i>). Zero hearts = K.O. Last one standing, or the top scorer still in when the questions run out, wins.
+            Answer before the fuse pops or lose a <Icon name="heart" font="body" className="heart-glyph" />. With the <i>mystery fuse</i>, one hidden fuse is passed round the table: answer fast and the next player inherits what's left. Wrong answers cost nothing but time: keep trying until the fuse pops. Zero hearts = K.O. Last one standing, or the top scorer still in when the questions run out, wins.
           </li>
           <li>Rarer answers score more and fill your 1UP meter (+1 <Icon name="heart" font="body" className="heart-glyph" /> every {BONUS_LIFE_POINTS} pts):</li>
         </ol>

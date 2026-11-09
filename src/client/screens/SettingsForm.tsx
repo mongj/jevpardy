@@ -18,20 +18,12 @@ export function TimedSettings({ settings, onChange, disabled }: { settings: Game
         disabled={disabled}
       />
       <Toggle
-        label="SUDDEN DEATH"
-        hint="Wrong or repeated answers cost a heart and pass the turn"
-        checked={settings.wrongAnswer === "life"}
-        onChange={(on) => onChange({ wrongAnswer: on ? "life" : "retry" })}
-        disabled={disabled}
-      />
-      <Toggle
         label="MYSTERY FUSE"
         hint="One hidden fuse for the whole table. Pass it on fast: whatever's left goes to the next player"
         checked={settings.mysteryFuse}
         onChange={(mysteryFuse) => onChange({ mysteryFuse })}
         disabled={disabled}
       />
-      <Toggle label="SPEED UP" hint="Turns get 1s shorter every lap (min 6s)" checked={settings.speedUp} onChange={(speedUp) => onChange({ speedUp })} disabled={disabled} />
     </div>
   );
 }
@@ -67,8 +59,6 @@ export function DeckSettings({ settings, onChange, disabled }: { settings: GameS
 export function settingsSummary(s: GameSettings): ReactNode {
   const deck = `${s.questionCount} questions · up to ${s.roundsPerQuestion} ${s.roundsPerQuestion === 1 ? "round" : "rounds"} each`;
   const parts = [s.mysteryFuse ? `~${s.turnSeconds}s mystery fuse` : `${s.turnSeconds}s turns`, deck];
-  if (s.wrongAnswer === "life") parts.push("sudden death");
-  if (s.speedUp) parts.push("speed up");
   return (
     <>
       {s.lives}

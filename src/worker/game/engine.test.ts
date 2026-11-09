@@ -233,20 +233,20 @@ describe("turns", () => {
     expect(r.ok && r.judge).toMatchObject({ question: state.deck[1]!.text, answer: "Paris", prior: [] });
   });
 
-  it("'retry' rule keeps the turn; 'life' rule costs a heart and passes", () => {
-    const retry = setup({ wrongAnswer: "retry" });
-    start(retry.state, retry.state.hostId!, retry.ctx);
-    const p = current(retry.state);
-    answer(retry.state, retry.ctx, "Gotham", REJECT);
-    expect(current(retry.state)).toBe(p);
-
-    const strict = setup({ wrongAnswer: "life", lives: 3 }, ["Ada", "Bo", "Cy"]);
-    start(strict.state, strict.state.hostId!, strict.ctx);
-    const q = current(strict.state);
-    const events = answer(strict.state, strict.ctx, "Gotham", REJECT);
-    expect(events.map((e) => e.type)).toEqual(["judging", "rejected", "lifeLost", "turnStarted"]);
-    expect(strict.state.players.find((x) => x.id === q)!.lives).toBe(2);
-    expect(strict.state.question!.failedBy).toEqual([q]);
+  it("wrong and repeated answers cost nothing: keep trying while the fuse burns", () => {
+    const { state, ctx } = setup({ lives: 3 });
+    start(state, state.hostId!, ctx);
+    const first = current(state);
+    expect(answer(state, ctx, "Gotham", REJECT).map((e) => e.type)).toEqual(["judging", "rejected"]);
+    expect(current(state)).toBe(first);
+    ctx.advance(1000);
+    answer(state, ctx, "Paris");
+    ctx.advance(1000);
+    answer(state, ctx, "Lyon");
+    ctx.advance(1000);
+    expect(submit(state, current(state), "paris", ctx)).toMatchObject({ ok: true, events: [{ type: "rejected" }] });
+    expect(state.players.every((x) => x.lives === 3)).toBe(true);
+    expect(state.question!.failedBy).toEqual([]);
   });
 
   it("freezes the clock while Jev judges", () => {

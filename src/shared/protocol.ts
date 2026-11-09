@@ -1,19 +1,14 @@
 // WebSocket + HTTP protocol shared by the Worker and the browser client.
 
 export type Phase = "lobby" | "playing" | "over";
-export type WrongAnswerRule = "retry" | "life";
 
 export interface GameSettings {
   /** Starting lives per player. */
   lives: number;
   /** Seconds per turn (or the average fuse when `mysteryFuse`). */
   turnSeconds: number;
-  /** What a rejected answer costs. "retry" keeps the clock running; "life" costs a heart and passes the turn. */
-  wrongAnswer: WrongAnswerRule;
   /** One hidden fuse shared by the table that carries over when you pass it on (Puffer Party style). */
   mysteryFuse: boolean;
-  /** Shave time off the turn clock after every full lap. */
-  speedUp: boolean;
   /** How many questions the deck holds. */
   questionCount: number;
   /** A question moves on after this many trips round the table, at the latest. */
@@ -42,7 +37,7 @@ export interface PublicQuestion {
   turns: number;
   /** Turns before it moves on (roundsPerQuestion × players still in). */
   maxTurns: number;
-  /** Players this question has beaten (fuse popped on them, or a sudden-death miss). */
+  /** Players this question has beaten (the fuse popped on them). */
   stumped: string[];
   startedAt: number;
 }
@@ -202,7 +197,8 @@ export interface PublicState {
 export type JudgeKind = "jev" | "mock";
 export type GeneratorKind = "openai" | "mock";
 
-export type LifeLostReason = "timeout" | "wrong" | "duplicate";
+/** Wrong answers never cost a heart (the fuse is the penalty), so the only way to lose one is the fuse popping. */
+export type LifeLostReason = "timeout";
 
 export type GameEvent =
   | { type: "playerJoined"; playerId: string }
@@ -219,7 +215,6 @@ export type GameEvent =
   | { type: "lifeEarned"; playerId: string; lives: number }
   | { type: "eliminated"; playerId: string }
   | { type: "skipped"; playerId: string }
-  | { type: "speedUp"; turnSeconds: number }
   | { type: "gameOver"; winnerId: string | null; reason: EndReason }
   | { type: "backToLobby" };
 

@@ -18,8 +18,6 @@ import {
   PLAYER_COLORS,
   PLAYING_IDLE_MS,
   QUESTION_REVEAL_MS,
-  SPEED_UP_MIN_SECONDS,
-  SPEED_UP_STEP_SECONDS,
   TIERS,
   mergeSettings,
   tierById,
@@ -141,7 +139,6 @@ export interface RoomState {
   turnCounter: number;
   turnOrder: string[];
   lap: number;
-  currentTurnSeconds: number;
   /** Mystery fuse: when the shared fuse pops (paused while Jev judges). */
   fuseEndsAt: number | null;
   startingPlayers: number;
@@ -214,7 +211,6 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     turnCounter: 0,
     turnOrder: [],
     lap: 0,
-    currentTurnSeconds: settings.turnSeconds,
     fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
@@ -452,7 +448,6 @@ export function configure(
     state.topics = clean;
   }
   state.settings = mergeSettings(state.settings, patch);
-  state.currentTurnSeconds = state.settings.turnSeconds;
   touch(state, ctx);
   return { ok: true, events: [], deckChanged: before !== `${state.topics.join("\n")}|${state.settings.questionCount}` };
 }
@@ -489,7 +484,6 @@ export function start(state: RoomState, actorId: string, ctx: Ctx): Result {
     ctx.rng,
   );
   state.lap = 1;
-  state.currentTurnSeconds = state.settings.turnSeconds;
   state.fuseEndsAt = null;
   state.history = [];
   touch(state, ctx);
@@ -544,11 +538,11 @@ export function questionEndReason(state: RoomState, nextPlayerId: string): Quest
 }
 
 function fuseFloorMs(state: RoomState): number {
-  return Math.max(FUSE_FLOOR_MIN_MS, Math.round(state.currentTurnSeconds * 1000 * FUSE_FLOOR_FACTOR));
+  return Math.max(FUSE_FLOOR_MIN_MS, Math.round(state.settings.turnSeconds * 1000 * FUSE_FLOOR_FACTOR));
 }
 
 function beginTurn(state: RoomState, playerId: string, ctx: Ctx, opts: { freshFuse?: boolean; reveal?: boolean } = {}): GameEvent[] {
-  const base = state.currentTurnSeconds * 1000;
+  const base = state.settings.turnSeconds * 1000;
   const reveal = opts.reveal ? QUESTION_REVEAL_MS : 0;
   let deadline: number;
   let durationMs: number;
@@ -604,16 +598,7 @@ function advanceTurn(state: RoomState, fromId: string, ctx: Ctx, opts: { freshFu
     events.push(...rotateQuestion(state, why, ctx));
     if (state.phase !== "playing") return events;
   }
-  if (next.wrapped) {
-    state.lap += 1;
-    if (state.settings.speedUp) {
-      const faster = Math.max(SPEED_UP_MIN_SECONDS, state.currentTurnSeconds - SPEED_UP_STEP_SECONDS);
-      if (faster !== state.currentTurnSeconds) {
-        state.currentTurnSeconds = faster;
-        events.push({ type: "speedUp", turnSeconds: faster });
-      }
-    }
-  }
+  if (next.wrapped) state.lap += 1;
   events.push(...beginTurn(state, next.id, ctx, { freshFuse: opts.freshFuse, reveal: why !== null }));
   return events;
 }
@@ -751,7 +736,7 @@ export function submit(state: RoomState, playerId: string, rawText: string, ctx:
   const original = key ? prior.find((a) => normalizeAnswer(a.text) === key) : undefined;
   if (original) {
     const verdict = recordRejection(state, player, text, "duplicate", original.text, 1, null, ctx);
-    return { ok: true, events: [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)], judge: null };
+    return { ok: true, events: [{ type: "rejected", verdict }], judge: null };
   }
 
   // The clock freezes while Jev thinks so judging latency never costs a life.
@@ -825,7 +810,7 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
     decision.tier,
     ctx,
   );
-  return [{ type: "rejected", verdict }, ...applyWrongAnswerRule(state, player, verdict, ctx)];
+  return [{ type: "rejected", verdict }];
 }
 
 function acceptAnswer(state: RoomState, player: PlayerRecord, text: string, decision: Pick<Decision, "tier" | "confidence">, ctx: Ctx): GameEvent[] {
@@ -918,11 +903,6 @@ function pushLog(state: RoomState, verdict: Verdict): void {
   if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
 }
 
-function applyWrongAnswerRule(state: RoomState, player: PlayerRecord, verdict: Verdict, ctx: Ctx): GameEvent[] {
-  if (state.settings.wrongAnswer !== "life") return [];
-  return loseLife(state, player, verdict.reason === "duplicate" ? "duplicate" : "wrong", ctx);
-}
-
 /** The current question beat this player. */
 function markStumped(state: RoomState, playerId: string): void {
   const q = state.question;
@@ -995,7 +975,6 @@ export function rematch(state: RoomState, actorId: string, topics: string[] | un
     turn: null,
     turnOrder: [],
     lap: 0,
-    currentTurnSeconds: state.settings.turnSeconds,
     fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
