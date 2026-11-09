@@ -13,8 +13,9 @@ A great question:
 - hits the sweet spot: a SPECIFIC category with roughly 15 to 60 answers, so players have to think but the table won't run dry ("Name a pasta shape", "Name a Bond villain", "Name a country that borders Germany", "Name a word that rhymes with 'cat'"). Avoid catch-alls like "Name a famous actor" or "Name a 1990s song" that anyone can answer forever: narrow them down ("Name an actor who has played Batman", "Name a 90s boy band");
 - is clearly about the topic, while the set of questions comes at it from different angles (people, places, things, works, terms, parts, events, wordplay...) and mixes easy questions with harder ones. Surprising angles are good: they make the game fun;
 - is not a trivia question with only one or two right answers.
+- (and most importantly) is fun to answer!
 
-Common duds to avoid: pair answers ("Name a famous celebrity couple"), records nobody knows ("Name a city Taylor Swift has performed in"), anything that changes over time ("Name a celebrity who has a talk show"), matters of opinion or degree ("Name a vegetable often roasted"), short lists ("Name a Taylor Swift tour"), fuzzy categories ("Name a Taylor Swift award show category"), and near-duplicates of each other.
+Common duds to avoid: pair answers ("Name a famous celebrity couple"), answers that change over time ("Name a celebrity who has a talk show"), short lists ("Name a Taylor Swift tour"), fuzzy categories ("Name a Taylor Swift award show category"), and near-duplicates of each other.
 
 Also give three valid example answers per question, from common to rarer. Players never see them: the judge uses them to check the question works.
 
