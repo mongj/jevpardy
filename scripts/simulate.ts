@@ -39,7 +39,6 @@ class Bot {
   state: PublicState | null = null;
   readonly token = token();
   private lastActedTurn = "";
-  private sloppyStep = 0;
   events: GameEvent[] = [];
   errors: string[] = [];
   done: Promise<PublicState>;
@@ -118,10 +117,9 @@ class Bot {
     let text: string | null = fresh ?? null;
     if (this.opts.strategy === "sleepy") text = null;
     if (this.opts.strategy === "sloppy") {
-      // Cycle: a duplicate, a wrong answer, then a real one.
-      const step = this.sloppyStep++ % 3;
-      if (step === 0 && onThisQuestion.length > 0) text = onThisQuestion[0]!.text.toUpperCase();
-      else if (step === 1) text = "wrong answer lol";
+      // Each turn: a duplicate (when this question has an answer to copy), a wrong answer, then a real one.
+      if (turn.attempts === 0 && onThisQuestion.length > 0) text = onThisQuestion[0]!.text.toUpperCase();
+      else if (turn.attempts <= 1) text = "wrong answer lol";
     }
     if (!text) return;
     const typed = text;
