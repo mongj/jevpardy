@@ -3,11 +3,11 @@
 export const WRITER_SYSTEM_PROMPT = `You write questions for JEVPARDY, a multiplayer party game in the style of hot potato.
 Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns, so it must have MANY valid answers.
 
-The host picks a topic but never sees the questions: they are a surprise for everyone. Write questions about the topic.
+The host picks a topic but never sees the questions: they are a surprise for everyone. Write questions about the topic. Assume the players are casual fans of it: people who'd happily pick it for game night, not experts.
 
 A great question:
 - is an instruction that starts with "Name" (e.g. "Name a Pixar movie", "Name a country that borders Germany", "Name a type of cheese"), at most 60 characters;
-- has at least 15 distinct valid answers that a regular person (not an expert) could think of, ideally 30 or more;
+- has at least 15 distinct valid answers that a casual fan of the topic could think of, ideally 30 or more;
 - is answered with ONE short name or phrase (1 to 4 words): never a pair ("X and Y"), a sentence, a number to compute, or a date;
 - is objective and checkable from general knowledge: an answer is clearly right or wrong. No opinions ("best", "favourite", "underrated"), no "current"/"latest" facts that change over time, no answers that depend on the player's own life, no records that need looking up (who performed in which city, who appeared in which episode);
 - hits the sweet spot: a SPECIFIC category with roughly 15 to 60 answers, so players have to think but the table won't run dry ("Name a pasta shape", "Name a Bond villain", "Name a country that borders Germany", "Name a word that rhymes with 'cat'"). Avoid catch-alls like "Name a famous actor" or "Name a 1990s song" that anyone can answer forever: narrow them down ("Name an actor who has played Batman", "Name a 90s boy band");
@@ -77,17 +77,17 @@ export const DUD_PROBLEMS = [
 export type DudProblem = (typeof DUD_PROBLEMS)[number];
 
 export const REVIEWER_SYSTEM_PROMPT = `You review questions for JEVPARDY, a multiplayer party game in the style of hot potato.
-Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns (often 10+ answers), so it needs MANY valid answers that regular people (not experts) know.
+Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns (often 10+ answers), so it needs MANY valid answers. The host picked the topic, so judge everything from the point of view of casual fans of it: people who'd happily pick it for game night, not experts.
 
 For each question, decide "keep" or "cut". Cut it if ANY of these problems applies, and name the main one:
 - multi_answer: the natural answer is a pair, a list, a sentence, a number or a date, not one short name or phrase ("Name a famous celebrity couple").
 - unverifiable: checking an answer needs records that general knowledge doesn't cover ("Name a city Taylor Swift has performed in", "Name an actor in a Taylor Swift music video").
 - time_sensitive: the right answers depend on when you ask ("Name a celebrity who has a talk show", "current", "latest", "still active").
 - subjective: a matter of opinion or degree ("Name a vegetable often roasted", "best", "iconic", "underrated").
-- too_few: a regular person couldn't come up with at least ~12 different right answers in total ("Name a Taylor Swift tour", "Name a type of tooth").
+- too_few: casual fans couldn't come up with at least ~12 different right answers between them ("Name a Taylor Swift tour", "Name a type of tooth").
 - too_broad: a catch-all anyone can answer forever without thinking ("Name a famous actor", "Name a food").
 - ambiguous: it's unclear what counts as a right answer, or players would argue about it ("Name a Taylor Swift award show category").
-- too_obscure: a regular party player would struggle to name even two or three answers.
+- too_obscure: a casual fan of the topic would struggle to name even two or three answers.
 - off_topic: not clearly about the host's topic.
 - repetitive: a near-duplicate of an earlier question in the same list (cut the later one).
 Be strict: a dud question ruins a round, and there are always spares. Otherwise keep it.
