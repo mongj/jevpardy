@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { EMOTES, type ClientMessage, type ErrorCode, type GameEvent, type GameSettings, type RoomInfoResponse, type ServerMessage } from "../shared/protocol.ts";
+import { EMOTES, type ClientMessage, type ErrorCode, type GameEvent, type RoomInfoResponse, type ServerMessage } from "../shared/protocol.ts";
 import {
   type Ctx,
   type Result,
@@ -10,6 +10,7 @@ import {
   configure,
   createRoom,
   decide,
+  deckOutOfDate,
   deckPlan,
   disconnect,
   end,
@@ -20,7 +21,7 @@ import {
   kick,
   nextAlarmAt,
   rebuildDeck,
-  regenerate,
+  generate,
   rematch,
   resolve,
   skip,
@@ -49,8 +50,6 @@ interface Attachment {
 
 export interface CreateOptions {
   code: string;
-  topics: string[];
-  settings: Partial<GameSettings>;
   hostToken: string;
 }
 
@@ -60,7 +59,7 @@ export class GameRoom extends DurableObject<Env> {
   private readonly generator: QuestionGenerator;
   private readonly reviewer: QuestionReviewer;
   private readonly lastTypingAt = new Map<string, number>();
-  /** The deck-writing job in flight, if any; edits made meanwhile set `deckDirty` so it runs again. */
+  /** The deck-writing job in flight, if any; `deckDirty` asks it to run once more (to top up short pools). */
   private writing: Promise<void> | null = null;
   private deckDirty = false;
 
@@ -102,19 +101,11 @@ export class GameRoom extends DurableObject<Env> {
     if (this.room) await this.wipe();
     const maxPlayers = Number(this.env.MAX_PLAYERS) || 12;
     this.room = createRoom(
-      { code: opts.code, topics: opts.topics, settings: opts.settings, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken },
+      { code: opts.code, judge: this.judge.kind, maxPlayers, hostToken: opts.hostToken },
       { now: Date.now() },
     );
     await this.persist();
-    log("info", "room.created", {
-      code: opts.code,
-      topics: this.room.topics.length,
-      questions: this.room.settings.questionCount,
-      judge: this.judge.kind,
-      generator: this.generator.kind,
-    });
-    // The host lands in the lobby straight away while the questions are written.
-    this.ensureDeck();
+    log("info", "room.created", { code: opts.code, judge: this.judge.kind, generator: this.generator.kind });
     return { ok: true };
   }
 
@@ -168,13 +159,11 @@ export class GameRoom extends DurableObject<Env> {
         return this.apply(ws, start(room, playerId, ctx));
       case "configure": {
         const topics = Array.isArray(msg.topics) ? msg.topics : undefined;
-        const result = configure(room, playerId, msg.settings ?? {}, topics, ctx);
-        await this.apply(ws, result);
-        if (result.ok && result.deckChanged) this.ensureDeck();
-        return;
+        // Edits only mark the deck out of date; writing waits for the host's "generate".
+        return this.apply(ws, configure(room, playerId, msg.settings ?? {}, topics, ctx));
       }
-      case "regenerate": {
-        const result = regenerate(room, playerId, ctx);
+      case "generate": {
+        const result = generate(room, playerId, ctx);
         await this.apply(ws, result);
         if (result.ok) this.ensureDeck();
         return;
@@ -194,10 +183,7 @@ export class GameRoom extends DurableObject<Env> {
       case "end":
         return this.apply(ws, end(room, playerId, ctx));
       case "rematch": {
-        const result = rematch(room, playerId, Array.isArray(msg.topics) ? msg.topics : undefined, ctx);
-        await this.apply(ws, result);
-        if (result.ok) this.ensureDeck();
-        return;
+        return this.apply(ws, rematch(room, playerId, ctx));
       }
       case "becomePlayer":
         return this.apply(ws, becomePlayer(room, playerId, ctx));
@@ -276,12 +262,14 @@ export class GameRoom extends DurableObject<Env> {
   private async writeDeck(): Promise<void> {
     const room = this.room;
     if (!room || room.phase !== "lobby") return;
+    // Record what this deck is for; if the host edits meanwhile, rebuildDeck marks it out of date.
+    beginGeneration(room, this.ctxNow());
     const requests = deckPlan(room);
     if (requests.length === 0) {
+      // Everything is cached (e.g. the count went down): deal straight away.
       rebuildDeck(room, this.ctxNow());
       return this.commit([]);
     }
-    beginGeneration(room, this.ctxNow());
     await this.commit([]);
     const started = Date.now();
     const pools = await Promise.all(requests.map((req) => this.writeTopic(room, req)));
@@ -293,8 +281,11 @@ export class GameRoom extends DurableObject<Env> {
       topics: pools.map((p) => ({ topic: p.topic, verdict: p.verdict, kept: p.candidates.length, error: p.error })),
       ms: Date.now() - started,
     });
-    // The host changed something mid-write: the next pass deals the deck.
-    if (this.deckDirty) return this.persist();
+    // The host edited mid-write: keep the (cached) pools, mark the deck out of date, and wait for them.
+    if (deckOutOfDate(current)) {
+      rebuildDeck(current, this.ctxNow());
+      return this.commit([]);
+    }
     // Pools still short (e.g. vetting dropped a few): another batch, bounded by MAX_BATCHES. Errors go
     // to the host instead (RETRY), so a writer outage doesn't loop.
     if (pools.every((p) => !p.error) && deckPlan(current).length > 0) {

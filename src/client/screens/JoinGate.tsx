@@ -34,8 +34,14 @@ export function JoinGate({ code, onJoin }: { code: string; onJoin: (name: string
       <Panel accent="yellow" className="join-preview">
         {info?.ok ? (
           <>
-            <p className="label">{info.topics.length === 1 ? "TOPIC" : "TOPICS"}</p>
-            <TopicList topics={info.topics} />
+            {info.topics.length > 0 ? (
+              <>
+                <p className="label">{info.topics.length === 1 ? "TOPIC" : "TOPICS"}</p>
+                <TopicList topics={info.topics} />
+              </>
+            ) : (
+              <p className="label">TOPICS STILL BEING PICKED</p>
+            )}
             <p className="muted small">
               {info.players}/{info.maxPlayers} players · {info.phase === "lobby" ? "waiting to start" : info.phase === "playing" ? "in progress" : "finished"}
             </p>

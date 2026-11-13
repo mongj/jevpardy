@@ -31,6 +31,9 @@ export const FUSE_FLOOR_MIN_MS = 4_000;
 /** Extra time on the first turn of a new question, so everyone can read it. */
 export const QUESTION_REVEAL_MS = 1_800;
 
+/** A question moves on after this many trips round the table, at the latest (sooner if it's cleared or stumps people). */
+export const ROUNDS_PER_QUESTION = 3;
+
 /** Bounds on how many answers one question takes before it's "cleared" (set per question from its answer pool). */
 export const QUESTION_CAP_MIN = 5;
 export const QUESTION_CAP_MAX = 20;
@@ -96,14 +99,12 @@ export const DEFAULT_SETTINGS: GameSettings = {
   turnSeconds: 15,
   mysteryFuse: true,
   questionCount: 10,
-  roundsPerQuestion: 2,
 };
 
 export const SETTINGS_LIMITS = {
   lives: { min: 1, max: MAX_LIVES },
   turnSeconds: { min: 5, max: 60 },
   questionCount: { min: 3, max: 30 },
-  roundsPerQuestion: { min: 1, max: 5 },
 } as const;
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
@@ -119,11 +120,5 @@ export function mergeSettings(base: GameSettings, patch: Partial<GameSettings> |
     turnSeconds: clampInt(p.turnSeconds, SETTINGS_LIMITS.turnSeconds.min, SETTINGS_LIMITS.turnSeconds.max, base.turnSeconds),
     mysteryFuse: typeof p.mysteryFuse === "boolean" ? p.mysteryFuse : base.mysteryFuse,
     questionCount: clampInt(p.questionCount, SETTINGS_LIMITS.questionCount.min, SETTINGS_LIMITS.questionCount.max, base.questionCount),
-    roundsPerQuestion: clampInt(
-      p.roundsPerQuestion,
-      SETTINGS_LIMITS.roundsPerQuestion.min,
-      SETTINGS_LIMITS.roundsPerQuestion.max,
-      base.roundsPerQuestion,
-    ),
   };
 }

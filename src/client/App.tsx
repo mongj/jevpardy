@@ -4,7 +4,6 @@ import { saveName } from "./lib/identity.ts";
 import { navigate, useRoute } from "./lib/router.ts";
 import { unlockAudio } from "./lib/sfx.ts";
 import { Home } from "./screens/Home.tsx";
-import { Host } from "./screens/Host.tsx";
 import { JoinGate } from "./screens/JoinGate.tsx";
 import { RoomScreen } from "./screens/Room.tsx";
 
@@ -22,9 +21,6 @@ export function App() {
   switch (route.name) {
     case "home":
       screen = <Home />;
-      break;
-    case "host":
-      screen = <Host />;
       break;
     case "join":
       screen =

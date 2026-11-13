@@ -11,8 +11,6 @@ export interface GameSettings {
   mysteryFuse: boolean;
   /** How many questions the deck holds. */
   questionCount: number;
-  /** A question moves on after this many trips round the table, at the latest. */
-  roundsPerQuestion: number;
 }
 
 /** lastStanding: one player left; allOut: everyone eliminated; questionsDone: the deck ran out. */
@@ -20,7 +18,7 @@ export type EndReason = "lastStanding" | "allOut" | "host" | "questionsDone";
 
 /**
  * Why a question was retired.
- * cleared: it took its full share of answers. rounds: it went round the table `roundsPerQuestion` times.
+ * cleared: it took its full share of answers. rounds: it went round the table ROUNDS_PER_QUESTION times.
  * stumped: it beat too many players, or was about to come back to someone it already beat.
  */
 export type QuestionEndReason = "cleared" | "rounds" | "stumped";
@@ -35,7 +33,7 @@ export interface PublicQuestion {
   cap: number;
   answered: number;
   turns: number;
-  /** Turns before it moves on (roundsPerQuestion × players still in). */
+  /** Turns before it moves on (ROUNDS_PER_QUESTION × players still in). */
   maxTurns: number;
   /** Players this question has beaten (the fuse popped on them). */
   stumped: string[];
@@ -69,7 +67,8 @@ export interface TopicReport {
 }
 
 export interface DeckInfo {
-  status: "generating" | "ready" | "failed";
+  /** idle: not written yet, or the topics/count changed since (the host presses WRITE QUESTIONS). */
+  status: "idle" | "generating" | "ready" | "failed";
   /** Questions in the deck (not shown until played). */
   ready: number;
   wanted: number;
@@ -225,13 +224,14 @@ export type ClientMessage =
   | { type: "hello"; token: string; name: string | null }
   | { type: "start" }
   | { type: "configure"; settings: Partial<GameSettings>; topics?: string[] }
-  | { type: "regenerate" }
+  /** Host: write the deck for the current topics and question count. */
+  | { type: "generate" }
   | { type: "submit"; text: string }
   | { type: "typing"; text: string }
   | { type: "kick"; playerId: string }
   | { type: "skip" }
   | { type: "end" }
-  | { type: "rematch"; topics?: string[] }
+  | { type: "rematch" }
   | { type: "emote"; emote: Emote }
   | { type: "becomePlayer" };
 
@@ -264,9 +264,8 @@ export type ServerMessage =
 
 // HTTP API
 
+/** Rooms start empty: the host picks topics and settings in the lobby. */
 export interface CreateRoomRequest {
-  topics: string[];
-  settings: Partial<GameSettings>;
   token: string;
 }
 

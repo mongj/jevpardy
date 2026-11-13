@@ -172,15 +172,22 @@ function describe(e: GameEvent, s: PublicState): string | null {
   }
 }
 
-async function createRoom(settings: Record<string, unknown>, hostToken: string, topics = ["European cities", "famous rivers"]): Promise<string> {
+/** Rooms start empty; the host picks topics and options in the lobby (see setUpDeck). */
+async function createRoom(hostToken: string): Promise<string> {
   const res = await fetch(`${BASE}/api/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topics, settings, token: hostToken }),
+    body: JSON.stringify({ token: hostToken }),
   });
   const body = (await res.json()) as CreateRoomResponse;
   if (!body.ok) throw new Error(`create failed: ${body.message}`);
   return body.code;
+}
+
+/** What the host does in the lobby: pick topics and options, then press WRITE QUESTIONS. */
+function setUpDeck(host: Bot, topics: string[], settings: Record<string, unknown>): void {
+  host.send({ type: "configure", settings, topics });
+  host.send({ type: "generate" });
 }
 
 function check(label: string, ok: boolean, failures: string[]): void {
@@ -219,7 +226,7 @@ function attachLogger(observer: Bot): void {
 async function runTimed(): Promise<string[]> {
   console.log("\n\x1b[1m=== TIMED MODE (3 bots, 2 lives, 6s turns, 5 questions × 2 rounds) ===\x1b[0m");
   const host = new Bot("", { name: "AceBot", strategy: "ace", pool: GOOD });
-  const code = await createRoom({ lives: 2, turnSeconds: 6, mysteryFuse: false, questionCount: 5, roundsPerQuestion: 2 }, host.token);
+  const code = await createRoom(host.token);
   console.log(`room ${code} — ${BASE}/r/${code}`);
   host.code = code;
   const bots = [
@@ -231,6 +238,11 @@ async function runTimed(): Promise<string[]> {
   attachLogger(bots[0]!);
   const failures: string[] = [];
   check("first joiner with creator token is host", bots[0]!.state!.hostId === bots[0]!.id, failures);
+  check("rooms start empty, with no deck", bots[0]!.state!.topics.length === 0 && bots[0]!.state!.deck.status === "idle", failures);
+  bots[1]!.send({ type: "generate" });
+  await wait(300);
+  check("non-host cannot write questions", bots[1]!.errors.some((e) => e.startsWith("not_host")), failures);
+  setUpDeck(bots[0]!, ["European cities", "famous rivers"], { lives: 2, turnSeconds: 6, mysteryFuse: false, questionCount: 5 });
   check("deck gets written", await until(bots[0]!, (s) => s.deck.status === "ready" && s.deck.ready === 5), failures);
   check("lobby never shows the questions", !JSON.stringify(bots[1]!.state).includes("Name "), failures);
   bots[1]!.send({ type: "start" });
@@ -277,11 +289,12 @@ async function runDeck(): Promise<string[]> {
   // The mock writer reads "(N)" as "only N questions exist"; "(0)" is unusable.
   console.log("\n\x1b[1m=== DECK (topic warnings, suggestions, secrecy) ===\x1b[0m");
   const host = new Bot("", { name: "Quizzy", strategy: "ace", pool: GOOD });
-  const code = await createRoom({ mode: "timed", questionCount: 6 }, host.token, ["my cat (0)", "dogs (2)", "space"]);
+  const code = await createRoom(host.token);
   console.log(`room ${code} — ${BASE}/r/${code}`);
   host.code = code;
   await host.connect();
   const failures: string[] = [];
+  setUpDeck(host, ["my cat (0)", "dogs (2)", "space"], { questionCount: 6 });
   check("deck gets written", await until(host, (s) => s.deck.status === "ready"), failures);
   const reports = host.state!.deck.reports;
   check("unusable topic is flagged with a suggestion", reports[0]?.status === "unusable" && !!reports[0].suggestion, failures);
@@ -289,7 +302,9 @@ async function runDeck(): Promise<string[]> {
   check("other topics fill the gap", reports[2]?.status === "ok" && host.state!.deck.ready === 6, failures);
   const suggestion = reports[0]!.suggestion!;
   host.send({ type: "configure", settings: {}, topics: [suggestion, "dogs (2)", "space"] });
-  check("taking the suggestion rewrites the deck", await until(host, (s) => s.topics[0] === suggestion && s.deck.status === "ready" && s.deck.reports[0]?.status === "ok"), failures);
+  check("editing topics marks the deck out of date", await until(host, (s) => s.topics[0] === suggestion && s.deck.status === "idle"), failures);
+  host.send({ type: "generate" });
+  check("writing again only fills in the new topic", await until(host, (s) => s.topics[0] === suggestion && s.deck.status === "ready" && s.deck.reports[0]?.status === "ok"), failures);
   host.send({ type: "start" });
   check("game starts", await until(host, (s) => s.phase === "playing"), failures);
   host.paused = true;

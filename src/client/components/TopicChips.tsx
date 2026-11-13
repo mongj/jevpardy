@@ -108,7 +108,7 @@ export function TopicEditor({
         </div>
       )}
       <p className="small muted topic-hint">
-        {full ? `That's the max: ${MAX_TOPICS} topics.` : `Up to ${MAX_TOPICS} topics. The questions stay secret until they're played, even from you.`}
+        Up to {MAX_TOPICS} topics.
       </p>
       {suggestions && !full && (
         <div className="suggestions">

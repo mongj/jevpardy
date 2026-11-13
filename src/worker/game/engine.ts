@@ -18,6 +18,7 @@ import {
   PLAYER_COLORS,
   PLAYING_IDLE_MS,
   QUESTION_REVEAL_MS,
+  ROUNDS_PER_QUESTION,
   TIERS,
   mergeSettings,
   tierById,
@@ -110,6 +111,8 @@ export interface Generation {
   id: number;
   status: DeckInfo["status"];
   startedAt: number | null;
+  /** deckSignature() of the topics and count the deck was (being) written for. */
+  signature: string | null;
 }
 
 export interface RoomState {
@@ -179,7 +182,7 @@ function emptyStats(): PlayerStats {
 
 export interface CreateRoomOptions {
   code: string;
-  topics: string[];
+  topics?: string[];
   settings?: Partial<GameSettings>;
   judge: JudgeKind;
   maxPlayers: number;
@@ -191,7 +194,7 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
   return {
     version: 2,
     code: opts.code,
-    topics: sanitizeTopics(opts.topics) ?? [],
+    topics: sanitizeTopics(opts.topics ?? []) ?? [],
     phase: "lobby",
     settings,
     judge: opts.judge,
@@ -203,7 +206,7 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     pools: [],
     deck: [],
     deckReports: [],
-    generation: { id: 0, status: "generating", startedAt: null },
+    generation: { id: 0, status: "idle", startedAt: null, signature: null },
     played: [],
     question: null,
     history: [],
@@ -385,10 +388,26 @@ export function deckPlan(state: RoomState): GenerateRequest[] {
   return topicsToGenerate({ topics: state.topics, pools: state.pools, count: state.settings.questionCount, played: state.played });
 }
 
-/** Marks the deck as being written and returns the new generation id. */
+/** What a deck is written for: the topics and the question count. */
+function deckSignature(state: RoomState): string {
+  return `${state.topics.map(topicKey).join("\n")}|${state.settings.questionCount}`;
+}
+
+/** Marks the deck as being written (for the current topics and count) and returns the new generation id. */
 export function beginGeneration(state: RoomState, ctx: Pick<Ctx, "now">): number {
-  state.generation = { id: state.generation.id + 1, status: "generating", startedAt: ctx.now };
+  state.generation = { id: state.generation.id + 1, status: "generating", startedAt: ctx.now, signature: deckSignature(state) };
   return state.generation.id;
+}
+
+/** The host changed the topics or count since this deck started being written. */
+export function deckOutOfDate(state: RoomState): boolean {
+  return state.generation.signature !== deckSignature(state);
+}
+
+function clearDeck(state: RoomState): void {
+  state.deck = [];
+  state.deckReports = [];
+  state.generation = { ...state.generation, status: "idle", startedAt: null, signature: null };
 }
 
 /** Stores freshly written topic pools (replacing older ones for the same topic). */
@@ -408,6 +427,8 @@ export function applyPools(state: RoomState, pools: TopicPool[]): void {
 /** Deals the deck from the pools. Only in the lobby: a game in progress keeps its deck. */
 export function rebuildDeck(state: RoomState, ctx: Pick<Ctx, "rng">): void {
   if (state.phase !== "lobby") return;
+  // The host changed the topics or count while this was being written: the pools are cached, but the deck is out of date.
+  if (deckOutOfDate(state)) return clearDeck(state);
   const { questions, reports } = buildDeck({
     topics: state.topics,
     pools: state.pools,
@@ -421,17 +442,17 @@ export function rebuildDeck(state: RoomState, ctx: Pick<Ctx, "rng">): void {
   state.generation = { ...state.generation, status: writerDown ? "failed" : "ready", startedAt: null };
 }
 
-/** Host asks for another go at topics that came back thin, unusable or failed. */
-export function regenerate(state: RoomState, actorId: string, ctx: Ctx): Result {
+/** Host presses WRITE QUESTIONS (or RETRY). The room then writes whatever the pools are missing. */
+export function generate(state: RoomState, actorId: string, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can do that.");
   if (state.phase !== "lobby") return fail("wrong_phase", "The game already started.");
-  const retry = new Set(state.deckReports.filter((r) => r.status !== "ok").map((r) => topicKey(r.topic)));
-  state.pools = state.pools.filter((p) => !retry.has(p.key));
+  if (state.topics.length === 0) return fail("bad_message", "Add at least one topic first.");
+  if (state.generation.status === "generating") return fail("deck_not_ready", "Already writing the questions…");
   touch(state, ctx);
   return { ok: true, events: [] };
 }
 
-/** True when topics or question count changed, so the room should top up the deck. */
+/** deckChanged: topics or question count changed, so the deck (if any) is now out of date. */
 export function configure(
   state: RoomState,
   actorId: string,
@@ -441,15 +462,19 @@ export function configure(
 ): Result<{ deckChanged: boolean }> {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can change settings.");
   if (state.phase !== "lobby") return fail("wrong_phase", "Settings are locked once the game starts.");
-  const before = `${state.topics.join("\n")}|${state.settings.questionCount}`;
+  const before = deckSignature(state);
   if (topics !== undefined) {
-    const clean = sanitizeTopics(topics);
-    if (!clean) return fail("bad_message", "Add at least one topic (3+ characters).");
+    // An empty list is fine in the lobby: the host is still picking.
+    const clean = topics.length === 0 ? [] : sanitizeTopics(topics);
+    if (!clean) return fail("bad_message", "Topics need 3+ characters.");
     state.topics = clean;
   }
   state.settings = mergeSettings(state.settings, patch);
+  const deckChanged = before !== deckSignature(state);
+  // A finished deck no longer matches; a write in flight notices when it lands (see rebuildDeck).
+  if (deckChanged && state.generation.status !== "generating") clearDeck(state);
   touch(state, ctx);
-  return { ok: true, events: [], deckChanged: before !== `${state.topics.join("\n")}|${state.settings.questionCount}` };
+  return { ok: true, events: [], deckChanged };
 }
 
 // ─── Game flow ──────────────────────────────────────────────────────────────
@@ -467,6 +492,7 @@ export function start(state: RoomState, actorId: string, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can start the game.");
   if (state.phase !== "lobby") return fail("wrong_phase", "The game already started.");
   if (state.generation.status === "generating") return fail("deck_not_ready", "Still writing the questions…");
+  if (state.generation.status !== "ready") return fail("deck_not_ready", "Write the questions first.");
   if (state.deck.length === 0) return fail("deck_not_ready", "No playable questions yet. Try different topics.");
   // Whoever wandered off from the lobby doesn't get dealt in.
   state.players = state.players.filter((p) => p.connected || p.id === actorId);
@@ -520,7 +546,7 @@ function answersFor(state: RoomState, index: number): AcceptedAnswer[] {
 }
 
 function maxTurns(state: RoomState): number {
-  return state.settings.roundsPerQuestion * Math.max(1, activePlayers(state).length);
+  return ROUNDS_PER_QUESTION * Math.max(1, activePlayers(state).length);
 }
 
 /**
@@ -947,14 +973,10 @@ export function end(state: RoomState, actorId: string, ctx: Ctx): Result {
   return { ok: true, events: finish(state, ctx, "host") };
 }
 
-export function rematch(state: RoomState, actorId: string, topics: string[] | undefined, ctx: Ctx): Result {
+/** Back to the lobby with the same topics; the host writes a fresh deck (never repeating a played question). */
+export function rematch(state: RoomState, actorId: string, ctx: Ctx): Result {
   if (!isHost(state, actorId)) return fail("not_host", "Only the host can start a rematch.");
   if (state.phase !== "over") return fail("wrong_phase", "Finish this game first.");
-  if (topics !== undefined) {
-    const clean = sanitizeTopics(topics);
-    if (!clean) return fail("bad_message", "Add at least one topic (3+ characters).");
-    state.topics = clean;
-  }
   state.players = state.players.filter((p) => p.connected);
   for (const p of state.players) {
     p.status = "waiting";
@@ -985,8 +1007,7 @@ export function rematch(state: RoomState, actorId: string, topics: string[] | un
     endReason: null,
     awards: [],
   } satisfies Partial<RoomState>);
-  // The room deals a fresh deck (without repeats) right after this.
-  state.generation = { ...state.generation, status: "generating", startedAt: ctx.now };
+  clearDeck(state);
   if (!findPlayer(state, state.hostId)) promoteHost(state);
   touch(state, ctx);
   return { ok: true, events: [{ type: "backToLobby" }] };

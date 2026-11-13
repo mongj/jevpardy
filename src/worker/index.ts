@@ -1,5 +1,4 @@
 import type { CreateRoomRequest, CreateRoomResponse, HealthResponse, RoomInfoResponse } from "../shared/protocol.ts";
-import { sanitizeTopics } from "../shared/sanitize.ts";
 import { createJudge } from "./judge/index.ts";
 import { createGenerator } from "./questions/index.ts";
 import { ROOM_CODE_PATTERN, log, randomRoomCode } from "./util.ts";
@@ -31,14 +30,11 @@ async function createRoomHandler(request: Request, env: Env): Promise<Response> 
   if (!body || typeof body !== "object" || typeof body.token !== "string" || !TOKEN_PATTERN.test(body.token)) {
     return json<CreateRoomResponse>({ ok: false, error: "bad_request", message: "Malformed request." }, 400);
   }
-  const topics = sanitizeTopics(body.topics);
-  if (!topics) return json<CreateRoomResponse>({ ok: false, error: "bad_topic", message: "Give Jev at least one topic (3+ characters)." }, 400);
-
-  // Questions are written in the background by the room; the host goes straight to the lobby.
+  // Rooms start empty: the host picks topics in the lobby and writes the questions from there.
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
     const code = randomRoomCode();
     const stub = env.GAME_ROOM.getByName(code);
-    const created = await stub.create({ code, topics, settings: body.settings ?? {}, hostToken: body.token });
+    const created = await stub.create({ code, hostToken: body.token });
     if (created.ok) return json<CreateRoomResponse>({ ok: true, code });
   }
   log("error", "room.code_exhausted");

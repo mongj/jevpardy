@@ -10,8 +10,13 @@ The whole thing is one Cloudflare Worker: static assets, an HTTP API, and one Du
 
 ## How to play
 
-1. **Host** taps *HOST GAME*, adds up to 5 topics, picks how many questions (3–30) and how many rounds each lasts, and gets a room code, a join link and a QR code straight away.
-2. While players join, **the questions are written in the background** (about 15 s; see below). They're a mystery to everyone, **the host included**: the lobby only says "10 MYSTERY QUESTIONS READY". If a topic is too narrow or personal ("my cat Fluffy"), only the host sees a warning, with a one-tap broader suggestion ("TRY 'cats'"). The other topics fill its share.
+1. **Host** taps *HOST GAME* and lands straight in the new room's lobby (`/r/ABCD`), with a room code, a join link and a QR code to share.
+2. In the lobby, the host adds up to 5 topics and taps **WRITE QUESTIONS**.
+   - **Options:** a dropdown holds the question count (3–30, default 10), hearts and the average fuse.
+   - **Writing:** about 15 s (see below), while players join.
+   - **Secrecy:** the questions are a mystery to everyone, **the host included**. The lobby only says "10 MYSTERY QUESTIONS READY", and the button turns into **START GAME**.
+   - **Bad topics:** if a topic is too narrow or personal ("my cat Fluffy"), only the host sees a warning, with a one-tap broader suggestion ("TRY 'cats'"). The other topics fill its share.
+   - **Editing:** changing topics or the question count afterwards marks the deck out of date, and the button goes back to WRITE QUESTIONS.
 3. **Players** open the link (or enter the code on the home screen) and pick a display name. No sign-up.
 4. Each question is revealed when it comes up. Players take turns naming one answer each. Jev judges it in about 250 ms:
    - ✔ **accepted**: it goes on the question's answer wall and you score points by rarity.
@@ -27,7 +32,7 @@ A question moves on as soon as any of these is true:
 | Rule | Why |
 |---|---|
 | **Cleared:** it has taken its share of answers (5–20, about 60% of the answers the writer expects it to have; 6 for questions Jev flags as short lists) | It doesn't run dry and turn into a timeout parade |
-| **Rounds up:** it has gone round the table *rounds each* times (host sets 1–5, default 2) | Keeps the game moving through the deck |
+| **Rounds up:** it has gone round the table 3 times (fixed on the server) | Keeps the game moving through the deck |
 | **Stumped:** it beat 2 players (1 when only 2 are left) | A question that's beating people moves on fast |
 | **Stumped:** the turn would come back to someone it already beat | Nobody faces a question twice that already cost them |
 
@@ -65,12 +70,14 @@ Points also fill a **1UP meter**: every 300 points earns +1 ♥, up to 5. That's
 ### Rule decisions (where the brief was open)
 
 - **The host doesn't see the questions either.** Questions never leave the server until they're played: the lobby gets a count, and the game gets only the current question. The host gets per-topic warnings ("thin", "no good", "failed") and a suggested replacement topic, but never question text.
-- **The room opens instantly; questions are written in the lobby.** Writing takes 3–4 s, which would make *CREATE ROOM* feel broken. *START* waits for the deck instead. Editing topics or the question count in the lobby only writes what's missing: each topic's questions are cached, and a new topic costs one call.
+- **One page for hosting.** *HOST GAME* opens an empty room, and everything else happens in its lobby: there's no separate "new game" form. Writing only starts when the host taps WRITE QUESTIONS, never while they're still typing topics.
+- **Rewriting is cheap.** Each topic's questions are cached in the room, so after an edit only new topics cost writer calls. Edits made during a write keep what was written but mark the deck out of date.
+- **Rounds per question aren't a setting.** Three trips round the table is long enough to enjoy a good question; the stumped rules end bad ones sooner. Fewer knobs for the host.
 - **Wrong answers only cost time.** The fuse is the penalty, as in Puffer Party. An AI judge will occasionally misjudge, and a heart lost to a misjudgment feels bad. (The old *sudden death* and *speed up* toggles are gone: Puffer Party has neither.)
 - **The clock freezes while Jev judges.** Judging latency never costs a life.
 - **Last one standing wins**, and so does the top scorer still standing when the deck runs out, so points matter.
 - **No free mode.** Puffer Party has one mode, and the fuse is what makes it tense. A no-clock mode also needed a "pass" button, which made questions easy to dodge.
-- **Jev's call is final.** There's no overrule. The host can **skip a turn**, **kick** a player, **end** the game, or start a **rematch** (new or same topics, fresh questions, never a repeat from this room).
+- **Jev's call is final.** There's no overrule. The host can **skip a turn**, **kick** a player, **end** the game, or start a **rematch**, which goes back to the lobby with the same topics. Writing again gives fresh questions, never a repeat from this room.
 - **Host handover.** If the host is disconnected for 20 s, the crown passes to the next connected player.
 - **Awards on the end screen:** Last One Standing, High Score, All-Rounder (scored on the most questions), Rarest Find, Speed Demon and Jev's Nemesis.
 
@@ -258,7 +265,7 @@ src/
     main.tsx, App.tsx, styles.css
     lib/           useRoom (WebSocket + reconnect) · identity · router · sfx (WebAudio chiptune) · clock
     components/    Pixel (sprites, Jev, hearts) · Starfield · Countdown/Fuse · AnswerWall (+ trail, recap) · TopicChips · PlayerRail · FxLayer · QRCode · ui
-    screens/       Home · Host · JoinGate · Lobby · Game · GameOver · Room · HowToPlay · SettingsForm
+    screens/       Home · JoinGate · Lobby (topics, options, write + start) · Game · GameOver · Room · HowToPlay · SettingsForm
 scripts/simulate.ts  bots that play full games over WebSocket (game, deck warnings)
 scripts/bench-questions.ts  benchmarks question writers: write → vet → blind-graded against the dud rubric
 wrangler.jsonc       Worker + assets + Durable Object + vars

@@ -484,11 +484,6 @@ input.code-input {
 
 /* ─── host ─── */
 
-.host-form {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
 
 .suggestions {
   display: flex;
@@ -721,9 +716,6 @@ input.code-input {
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
-.lobby-settings {
-  margin-top: 16px;
 }
 .lobby-players {
   list-style: none;
@@ -1396,16 +1388,6 @@ body:has(.host-bar) .mock-badge {
 .over-actions .small {
   font-family: var(--body);
 }
-.rematch input {
-  font-family: var(--body);
-}
-.rematch {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  text-align: left;
-}
 
 /* ─── overlays ─── */
 
@@ -1803,4 +1785,37 @@ body:has(.host-bar) .mock-badge {
   margin: 0;
   padding-left: 22px;
   color: var(--dim);
+}
+
+/* ─── game options ─── */
+
+.game-options {
+  margin-top: 16px;
+  border-top: 2px dashed var(--line);
+  padding-top: 10px;
+}
+.game-options summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.game-options summary::-webkit-details-marker {
+  display: none;
+}
+.game-options summary .label {
+  margin: 0;
+}
+.options-caret {
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 120ms steps(2);
+}
+.game-options[open] .options-caret {
+  transform: rotate(90deg);
+}
+.game-options .timed-settings {
+  margin-top: 12px;
 }

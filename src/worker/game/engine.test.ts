@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BONUS_LIFE_POINTS, DEFAULT_SETTINGS, EMPTY_ROOM_MS, OVER_TTL_MS, QUESTION_REVEAL_MS, mergeSettings } from "../../shared/constants.ts";
+import { BONUS_LIFE_POINTS, DEFAULT_SETTINGS, EMPTY_ROOM_MS, OVER_TTL_MS, QUESTION_REVEAL_MS, ROUNDS_PER_QUESTION, mergeSettings } from "../../shared/constants.ts";
 import type { GameSettings } from "../../shared/protocol.ts";
 import { normalizeAnswer, sanitizeAnswer, sanitizeName, sanitizeTopics } from "../../shared/sanitize.ts";
 import type { JudgeOutput } from "../judge/types.ts";
@@ -10,12 +10,15 @@ import {
   type Decision,
   type RoomState,
   applyPools,
+  beginGeneration,
   configure,
   createRoom,
   deckPlan,
   decide,
+  deckOutOfDate,
   disconnect,
   expiresAt,
+  generate,
   join,
   kick,
   nextAlarmAt,
@@ -62,8 +65,19 @@ function giveDeck(state: RoomState, ctx: Ctx, opts: { count?: number; pool?: num
       candidates: Array.from({ length: count + 3 }, (_, i) => ({ ...candidate(`Name ${topic} thing ${i + 1}`, opts.pool ?? 50), topic })),
     }),
   );
+  beginGeneration(state, ctx);
   applyPools(state, pools);
   rebuildDeck(state, ctx);
+}
+
+/** Answers `n` times in a row with distinct answers, 1 s apart. */
+function answerTimes(state: RoomState, ctx: Ctx & { advance: (ms: number) => void }, n: number, prefix = "A") {
+  let events: ReturnType<typeof answer> = [];
+  for (let i = 0; i < n; i++) {
+    ctx.advance(1000);
+    events = answer(state, ctx, `${prefix}${i}`);
+  }
+  return events;
 }
 
 function setup(settings: Partial<GameSettings>, names = ["Ada", "Bo"], deck: { count?: number; pool?: number } = {}) {
@@ -132,27 +146,59 @@ describe("lobby", () => {
     expect(state.turnOrder).toHaveLength(2);
   });
 
+  it("starts rooms empty; only the host can ask for questions, and only with a topic", () => {
+    const ctx = makeCtx();
+    const state = createRoom({ code: "ABCD", judge: "mock", maxPlayers: 12 }, ctx);
+    const host = join(state, { token: "a", name: "Ada" }, ctx);
+    const guest = join(state, { token: "b", name: "Bo" }, ctx);
+    if (!host.ok || !guest.ok) throw new Error("join failed");
+    expect(toPublic(state)).toMatchObject({ topics: [], deck: { status: "idle", ready: 0 } });
+    expect(generate(state, host.player.id, ctx)).toMatchObject({ ok: false, code: "bad_message" });
+    expect(configure(state, host.player.id, {}, ["Europe"], ctx).ok).toBe(true);
+    expect(generate(state, guest.player.id, ctx)).toMatchObject({ ok: false, code: "not_host" });
+    expect(generate(state, host.player.id, ctx).ok).toBe(true);
+  });
+
   it("won't start until the deck is written", () => {
     const ctx = makeCtx();
     const state = createRoom({ code: "ABCD", topics: ["Europe"], judge: "mock", maxPlayers: 12 }, ctx);
     const host = join(state, { token: "a", name: "Ada" }, ctx);
     if (!host.ok) throw new Error("join failed");
+    expect(start(state, host.player.id, ctx)).toMatchObject({ ok: false, code: "deck_not_ready" });
+    beginGeneration(state, ctx);
     expect(toPublic(state).deck.status).toBe("generating");
+    expect(generate(state, host.player.id, ctx)).toMatchObject({ ok: false, code: "deck_not_ready" });
     expect(start(state, host.player.id, ctx)).toMatchObject({ ok: false, code: "deck_not_ready" });
     giveDeck(state, ctx, { count: 5 });
     expect(toPublic(state).deck).toMatchObject({ status: "ready", ready: 5, wanted: 5 });
     expect(start(state, host.player.id, ctx).ok).toBe(true);
   });
 
-  it("flags deck changes when topics or the question count change", () => {
+  it("marks the deck out of date when topics or the question count change", () => {
     const { state, ctx, ids } = setup({});
     const host = ids[0]!;
     expect(configure(state, host, { lives: 2 }, undefined, ctx)).toMatchObject({ ok: true, deckChanged: false });
+    expect(toPublic(state).deck.status).toBe("ready");
     expect(configure(state, host, { questionCount: 12 }, undefined, ctx)).toMatchObject({ ok: true, deckChanged: true });
+    expect(toPublic(state).deck).toMatchObject({ status: "idle", ready: 0 });
+    expect(start(state, host, ctx)).toMatchObject({ ok: false, code: "deck_not_ready" });
     expect(configure(state, host, {}, ["Europe", "  europe ", "Pixar"], ctx)).toMatchObject({ ok: true, deckChanged: true });
     expect(state.topics).toEqual(["Europe", "Pixar"]);
+    // Cached pools mean only the new topic needs writing.
     expect(deckPlan(state).map((r) => r.topic)).toEqual(["Pixar"]);
+    expect(configure(state, host, {}, [], ctx)).toMatchObject({ ok: true });
+    expect(state.topics).toEqual([]);
     expect(configure(state, host, {}, ["  "], ctx)).toMatchObject({ ok: false });
+  });
+
+  it("doesn't deal a deck the host edited while it was being written", () => {
+    const { state, ctx, ids } = setup({});
+    beginGeneration(state, ctx);
+    configure(state, ids[0]!, {}, ["Pixar"], ctx);
+    expect(toPublic(state).deck.status).toBe("generating");
+    expect(deckOutOfDate(state)).toBe(true);
+    rebuildDeck(state, ctx);
+    expect(toPublic(state).deck).toMatchObject({ status: "idle", ready: 0 });
   });
 
   it("never sends unplayed questions to clients", () => {
@@ -222,15 +268,13 @@ describe("turns", () => {
   });
 
   it("only sends Jev the current question and its answers; repeats across questions are fine", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 1 });
+    const { state, ctx } = setup({});
     start(state, state.hostId!, ctx);
-    answer(state, ctx, "Paris");
-    ctx.advance(1000);
-    answer(state, ctx, "Rome");
+    answerTimes(state, ctx, 2 * ROUNDS_PER_QUESTION);
     expect(state.question!.index).toBe(1);
     ctx.advance(1000);
-    const r = submit(state, current(state), "Paris", ctx);
-    expect(r.ok && r.judge).toMatchObject({ question: state.deck[1]!.text, answer: "Paris", prior: [] });
+    const r = submit(state, current(state), "A0", ctx);
+    expect(r.ok && r.judge).toMatchObject({ question: state.deck[1]!.text, answer: "A0", prior: [] });
   });
 
   it("wrong and repeated answers cost nothing: keep trying while the fuse burns", () => {
@@ -272,7 +316,7 @@ describe("turns", () => {
   });
 
   it("fills the 1UP meter for a bonus life", () => {
-    const { state, ctx } = setup({ lives: 3, roundsPerQuestion: 5 }, ["Solo"]);
+    const { state, ctx } = setup({ lives: 3 }, ["Solo"]);
     start(state, state.hostId!, ctx);
     const pid = current(state);
     for (let i = 0; i < 4; i++) {
@@ -331,16 +375,13 @@ describe("mystery fuse", () => {
 });
 
 describe("question rotation", () => {
-  it("moves on after the set number of rounds", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 2, mysteryFuse: false, turnSeconds: 10 });
+  it("moves on after three rounds", () => {
+    const { state, ctx } = setup({ mysteryFuse: false, turnSeconds: 10 });
     start(state, state.hostId!, ctx);
-    for (let i = 0; i < 3; i++) {
-      ctx.advance(1000);
-      answer(state, ctx, `A${i}`);
-    }
+    answerTimes(state, ctx, 2 * ROUNDS_PER_QUESTION - 1);
     expect(state.question!.index).toBe(0);
     ctx.advance(1000);
-    const events = answer(state, ctx, "A3");
+    const events = answer(state, ctx, "last");
     expect(events).toContainEqual({ type: "questionStarted", index: 1, why: "rounds" });
     expect(state.history).toMatchObject([{ index: 0, endedBy: "rounds", played: true }]);
     // The new question's first turn gets time to read it.
@@ -348,7 +389,7 @@ describe("question rotation", () => {
   });
 
   it("is cleared once it has taken its share of answers", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 5 }, ["Ada", "Bo"], { pool: 8 });
+    const { state, ctx } = setup({}, ["Ada", "Bo"], { pool: 8 });
     expect(state.deck[0]!.cap).toBe(5);
     start(state, state.hostId!, ctx);
     for (let i = 0; i < 4; i++) {
@@ -360,7 +401,7 @@ describe("question rotation", () => {
   });
 
   it("never hands a question back to someone it already beat", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 3 }, ["Ada", "Bo", "Cy"]);
+    const { state, ctx } = setup({}, ["Ada", "Bo", "Cy"]);
     start(state, state.hostId!, ctx);
     const beaten = current(state);
     timeout(state, ctx);
@@ -373,7 +414,7 @@ describe("question rotation", () => {
   });
 
   it("moves on as soon as it beats two players", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 3 }, ["Ada", "Bo", "Cy", "Di"]);
+    const { state, ctx } = setup({}, ["Ada", "Bo", "Cy", "Di"]);
     start(state, state.hostId!, ctx);
     timeout(state, ctx);
     expect(state.question!.index).toBe(0);
@@ -382,21 +423,22 @@ describe("question rotation", () => {
   });
 
   it("with two players left, one miss is enough", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 3 });
+    const { state, ctx } = setup({});
     start(state, state.hostId!, ctx);
     expect(timeout(state, ctx)).toContainEqual({ type: "questionStarted", index: 1, why: "stumped" });
   });
 
   it("ends the game when the deck runs out, survivors ranked by points", () => {
-    const { state, ctx } = setup({ roundsPerQuestion: 1 }, ["Ada", "Bo"], { count: 3 });
+    const { state, ctx } = setup({}, ["Ada", "Bo"], { count: 3 });
     start(state, state.hostId!, ctx);
-    for (let i = 0; i < 5; i++) {
+    const perQuestion = 2 * ROUNDS_PER_QUESTION;
+    for (let i = 0; i < 3 * perQuestion - 1; i++) {
       ctx.advance(1000);
       answer(state, ctx, `A${i}`, { ...ACCEPT, tier: i === 0 ? "rare" : "basic" });
     }
     expect(state.question!.index).toBe(2);
     ctx.advance(1000);
-    const events = answer(state, ctx, "A5");
+    const events = answer(state, ctx, "last");
     expect(events.at(-1)).toMatchObject({ type: "gameOver", reason: "questionsDone" });
     expect(state.history.map((h) => [h.index, h.played, h.endedBy])).toEqual([
       [0, true, "rounds"],
@@ -429,12 +471,15 @@ describe("rematch", () => {
     start(state, ids[0]!, ctx);
     const played = state.deck[0]!.text;
     timeout(state, ctx);
-    expect(rematch(state, ids[0]!, ["Europe", "Pixar"], ctx).ok).toBe(true);
+    expect(rematch(state, ids[1]!, ctx)).toMatchObject({ ok: false, code: "not_host" });
+    expect(rematch(state, ids[0]!, ctx).ok).toBe(true);
     expect(state.phase).toBe("lobby");
-    expect(toPublic(state).deck.status).toBe("generating");
-    expect(state.topics).toEqual(["Europe", "Pixar"]);
-    expect(deckPlan(state).map((r) => r.topic)).toEqual(["Pixar"]);
+    // Same topics, no deck until the host writes one.
+    expect(toPublic(state)).toMatchObject({ topics: ["Europe"], deck: { status: "idle", ready: 0 } });
+    expect(deckPlan(state)).toEqual([]);
+    beginGeneration(state, ctx);
     rebuildDeck(state, ctx);
+    expect(toPublic(state).deck.status).toBe("ready");
     expect(state.deck.map((q) => q.text)).not.toContain(played);
   });
 });
@@ -475,12 +520,11 @@ describe("shared helpers", () => {
   });
 
   it("clamps settings", () => {
-    expect(mergeSettings(DEFAULT_SETTINGS, { lives: 99, turnSeconds: -4, mysteryFuse: "yes" as never, questionCount: 500, roundsPerQuestion: 0 })).toMatchObject({
+    expect(mergeSettings(DEFAULT_SETTINGS, { lives: 99, turnSeconds: -4, mysteryFuse: "yes" as never, questionCount: 500 })).toMatchObject({
       lives: 5,
       turnSeconds: 5,
       mysteryFuse: true,
       questionCount: 30,
-      roundsPerQuestion: 1,
     });
   });
 });

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export type Route = { name: "home" } | { name: "host" } | { name: "join"; code: string } | { name: "room"; code: string };
+export type Route = { name: "home" } | { name: "join"; code: string } | { name: "room"; code: string };
 
 const listeners = new Set<() => void>();
 
@@ -25,7 +25,6 @@ export function parseRoute(path: string): Route {
   if (room) return { name: "room", code: room[1]!.toUpperCase() };
   const join = path.match(/^\/join(?:\/([A-Za-z]{0,4}))?\/?$/);
   if (join) return { name: "join", code: (join[1] ?? "").toUpperCase() };
-  if (path.startsWith("/host")) return { name: "host" };
   return { name: "home" };
 }
 

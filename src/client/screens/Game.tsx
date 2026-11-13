@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { MAX_ANSWER_LENGTH } from "../../shared/constants.ts";
+import { MAX_ANSWER_LENGTH, ROUNDS_PER_QUESTION } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
 import { AnswerWall, QuestionTrail } from "../components/AnswerWall.tsx";
 import { Countdown, Fuse } from "../components/Countdown.tsx";
@@ -43,7 +43,7 @@ function QuestionCard({ state }: { state: PublicState }) {
   if (!q) return null;
   const total = state.deck.ready;
   const final = q.index === total - 1;
-  const roundsLeft = Math.max(1, Math.ceil((q.maxTurns - q.turns) / Math.max(1, q.maxTurns / state.settings.roundsPerQuestion)));
+  const roundsLeft = Math.max(1, Math.ceil((q.maxTurns - q.turns) / Math.max(1, q.maxTurns / ROUNDS_PER_QUESTION)));
   return (
     <div className="question-card" key={q.index}>
       <div className="question-meta">

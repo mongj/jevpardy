@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { tierById } from "../../shared/constants.ts";
 import type { ClientMessage, EndReason, PublicPlayer, PublicState } from "../../shared/protocol.ts";
 import { QuestionRecap } from "../components/AnswerWall.tsx";
 import { Crown, Icon, JevBot, Sprite } from "../components/Pixel.tsx";
-import { TopicEditor, withDraft } from "../components/TopicChips.tsx";
 import { Blink, Panel, PixelButton } from "../components/ui.tsx";
 import { useTicker } from "../lib/clock.ts";
 import { navigate } from "../lib/router.ts";
@@ -44,9 +42,6 @@ function Selfdestruct({ at, offset }: { at: number; offset: number }) {
 
 export function GameOver({ state, meId, offset, send }: { state: PublicState; meId: string; offset: number; send: (m: ClientMessage) => void }) {
   const isHost = state.hostId === meId;
-  const [topics, setTopics] = useState(state.topics);
-  const [draft, setDraft] = useState("");
-  const nextTopics = withDraft(topics, draft);
   const played = state.history.filter((h) => h.played).length;
   const ranked = state.players.filter((p) => p.role === "player").sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
   const winner = state.players.find((p) => p.id === state.winnerId);
@@ -134,20 +129,9 @@ export function GameOver({ state, meId, offset, send }: { state: PublicState; me
 
       <div className="over-actions">
         {isHost ? (
-          <form
-            className="panel accent-green rematch"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (nextTopics.length > 0) send({ type: "rematch", topics: nextTopics });
-            }}
-          >
-            <p className="label">NEXT GAME'S TOPICS</p>
-            <TopicEditor topics={topics} onChange={setTopics} draft={draft} onDraft={setDraft} />
-            <p className="small muted">Fresh questions, no repeats from this room.</p>
-            <PixelButton big tone="green" type="submit" disabled={nextTopics.length === 0}>
-              <Icon name="replay" /> PLAY AGAIN
-            </PixelButton>
-          </form>
+          <PixelButton big tone="green" onClick={() => send({ type: "rematch" })}>
+            <Icon name="replay" /> PLAY AGAIN
+          </PixelButton>
         ) : (
           <Blink>WAITING FOR HOST…</Blink>
         )}

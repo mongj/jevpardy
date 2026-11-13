@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { ROOM_CODE_LENGTH } from "../../shared/constants.ts";
-import type { HealthResponse } from "../../shared/protocol.ts";
+import type { CreateRoomRequest, CreateRoomResponse, HealthResponse } from "../../shared/protocol.ts";
 import { Icon, JevBot, Sprite } from "../components/Pixel.tsx";
 import { PixelButton } from "../components/ui.tsx";
+import { getToken } from "../lib/identity.ts";
 import { navigate } from "../lib/router.ts";
 import { sfx, unlockAudio } from "../lib/sfx.ts";
 import { HowToPlay } from "./HowToPlay.tsx";
@@ -23,6 +24,26 @@ export function Home() {
   const [code, setCode] = useState("");
   const [howTo, setHowTo] = useState(false);
   const [judge, setJudge] = useState<HealthResponse | null>(null);
+  const [hosting, setHosting] = useState(false);
+  const [hostError, setHostError] = useState<string | null>(null);
+
+  // Hosting opens an empty room straight away; topics and options are picked in its lobby.
+  const host = async () => {
+    unlockAudio();
+    sfx.coin();
+    setHosting(true);
+    setHostError(null);
+    try {
+      const body: CreateRoomRequest = { token: getToken() };
+      const res = await fetch("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = (await res.json()) as CreateRoomResponse;
+      if (data.ok) return navigate(`/r/${data.code}`);
+      setHostError(data.message);
+    } catch {
+      setHostError("Couldn't reach the server. Check your connection.");
+    }
+    setHosting(false);
+  };
 
   useEffect(() => {
     fetch("/api/health")
@@ -51,17 +72,16 @@ export function Home() {
       </div>
 
       <div className="home-actions">
-        <PixelButton
-          big
-          tone="yellow"
-          onClick={() => {
-            unlockAudio();
-            sfx.coin();
-            navigate("/host");
-          }}
-        >
-          <Icon name="right" /> HOST GAME
+        <PixelButton big tone="yellow" onClick={() => void host()} disabled={hosting}>
+          {hosting ? (
+            "OPENING…"
+          ) : (
+            <>
+              <Icon name="right" /> HOST GAME
+            </>
+          )}
         </PixelButton>
+        {hostError && <p className="error-text">{hostError}</p>}
 
         <form
           className="join-box panel accent-cyan"
