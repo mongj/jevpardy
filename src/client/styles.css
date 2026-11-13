@@ -549,52 +549,6 @@ input.code-input {
   opacity: 0.35;
 }
 
-.toggle {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  cursor: pointer;
-}
-.toggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.toggle-box {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 2px;
-  background: #05040f;
-  box-shadow: inset 0 0 0 3px var(--line);
-}
-.toggle.on .toggle-box {
-  background: var(--green);
-  box-shadow:
-    inset 0 0 0 3px #05040f,
-    0 0 0 3px var(--green);
-}
-.toggle input:focus-visible + .toggle-box {
-  outline: 2px solid var(--yellow);
-}
-.toggle.disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.toggle-text {
-  display: flex;
-  flex-direction: column;
-}
-.toggle-label {
-  font-family: var(--display);
-  font-size: 10px;
-  margin-top: 6px;
-}
-.toggle-hint {
-  font-size: 17px;
-  color: var(--dim);
-}
-
 /* ─── modal ─── */
 
 .modal-backdrop {
@@ -882,26 +836,6 @@ input.code-input {
   }
 }
 
-.fuse {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  animation: jitter calc(0.4s - var(--heat) * 0.3s) steps(2) infinite;
-}
-.fuse svg {
-  flex: 1;
-}
-.fuse-label {
-  font-family: var(--display);
-  font-size: 18px;
-  color: var(--orange);
-}
-.fuse.frozen {
-  animation: none;
-}
-.spark {
-  animation: blink 0.15s steps(1) infinite;
-}
 .jev-row {
   display: flex;
   align-items: center;

@@ -21,13 +21,6 @@ export const MAX_ATTEMPTS_PER_TURN = 30;
 export const MIN_TYPING_INTERVAL_MS = 80;
 
 
-// Mystery fuse (Puffer Party style): one hidden fuse shared by the table, measured on krillion.io as
-// 10–30 s with an 8 s floor. Here it scales with the host's "average fuse" T: a fresh fuse burns for
-// T×[0.6, 1.8], passing it on keeps what's left, but never less than the floor.
-export const FUSE_MIN_FACTOR = 0.6;
-export const FUSE_MAX_FACTOR = 1.8;
-export const FUSE_FLOOR_FACTOR = 0.5;
-export const FUSE_FLOOR_MIN_MS = 4_000;
 /** Extra time on the first turn of a new question, so everyone can read it. */
 export const QUESTION_REVEAL_MS = 1_800;
 
@@ -97,7 +90,6 @@ export const AVATAR_COUNT = 8;
 export const DEFAULT_SETTINGS: GameSettings = {
   lives: 3,
   turnSeconds: 15,
-  mysteryFuse: true,
   questionCount: 10,
 };
 
@@ -118,7 +110,6 @@ export function mergeSettings(base: GameSettings, patch: Partial<GameSettings> |
   return {
     lives: clampInt(p.lives, SETTINGS_LIMITS.lives.min, SETTINGS_LIMITS.lives.max, base.lives),
     turnSeconds: clampInt(p.turnSeconds, SETTINGS_LIMITS.turnSeconds.min, SETTINGS_LIMITS.turnSeconds.max, base.turnSeconds),
-    mysteryFuse: typeof p.mysteryFuse === "boolean" ? p.mysteryFuse : base.mysteryFuse,
     questionCount: clampInt(p.questionCount, SETTINGS_LIMITS.questionCount.min, SETTINGS_LIMITS.questionCount.max, base.questionCount),
   };
 }

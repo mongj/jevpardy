@@ -37,7 +37,7 @@ function makeCtx(): Ctx & { advance: (ms: number) => void } {
   let id = 0;
   const ctx = {
     now: 1_000_000,
-    rng: () => 0, // deterministic: shuffles are stable, fresh fuses are the shortest
+    rng: () => 0, // deterministic: shuffles are stable
     newId: () => `id${++id}`,
     advance(ms: number) {
       ctx.now += ms;
@@ -214,7 +214,7 @@ describe("lobby", () => {
 
 describe("turns", () => {
   it("costs a life on timeout and passes the turn", () => {
-    const { state, ctx } = setup({ lives: 3, turnSeconds: 10, mysteryFuse: false });
+    const { state, ctx } = setup({ lives: 3, turnSeconds: 10 });
     start(state, state.hostId!, ctx);
     const first = current(state);
     expect(state.turn!.deadline).toBe(ctx.now + 10_000 + QUESTION_REVEAL_MS);
@@ -294,7 +294,7 @@ describe("turns", () => {
   });
 
   it("freezes the clock while Jev judges", () => {
-    const { state, ctx } = setup({ turnSeconds: 10, mysteryFuse: false });
+    const { state, ctx } = setup({ turnSeconds: 10 });
     start(state, state.hostId!, ctx);
     const deadline = state.turn!.deadline!;
     ctx.advance(6_000);
@@ -342,41 +342,9 @@ describe("turns", () => {
   });
 });
 
-describe("mystery fuse", () => {
-  // turnSeconds 20 → fresh fuse 12–36 s (rng=0 → 12 s), floor 10 s.
-  const fuse = { mysteryFuse: true, turnSeconds: 20 } as const;
-
-  it("hides the deadline from clients", () => {
-    const { state, ctx } = setup(fuse);
-    start(state, state.hostId!, ctx);
-    expect(state.turn!.deadline).toBe(ctx.now + 12_000 + QUESTION_REVEAL_MS);
-    expect(toPublic(state).turn!.deadline).toBeNull();
-    expect(nextAlarmAt(state)).toBe(state.turn!.deadline);
-  });
-
-  it("is shared: passing it on keeps the time left, topped up to the floor", () => {
-    const { state, ctx } = setup(fuse, ["Ada", "Bo", "Cy"]);
-    start(state, state.hostId!, ctx);
-    const popsAt = state.turn!.deadline!;
-    ctx.advance(1_000);
-    answer(state, ctx, "Paris");
-    expect(state.turn!.deadline).toBe(popsAt); // 12.8 s left: inherited as-is
-    ctx.advance(5_000);
-    answer(state, ctx, "Rome");
-    expect(state.turn!.deadline).toBe(ctx.now + 10_000); // 7.8 s left: topped up to the floor
-  });
-
-  it("lights a fresh fuse after a pop", () => {
-    const { state, ctx } = setup(fuse, ["Ada", "Bo", "Cy"]);
-    start(state, state.hostId!, ctx);
-    timeout(state, ctx);
-    expect(state.turn!.deadline).toBe(ctx.now + 12_000);
-  });
-});
-
 describe("question rotation", () => {
   it("moves on after three rounds", () => {
-    const { state, ctx } = setup({ mysteryFuse: false, turnSeconds: 10 });
+    const { state, ctx } = setup({ turnSeconds: 10 });
     start(state, state.hostId!, ctx);
     answerTimes(state, ctx, 2 * ROUNDS_PER_QUESTION - 1);
     expect(state.question!.index).toBe(0);
@@ -520,10 +488,9 @@ describe("shared helpers", () => {
   });
 
   it("clamps settings", () => {
-    expect(mergeSettings(DEFAULT_SETTINGS, { lives: 99, turnSeconds: -4, mysteryFuse: "yes" as never, questionCount: 500 })).toMatchObject({
+    expect(mergeSettings(DEFAULT_SETTINGS, { lives: 99, turnSeconds: -4, questionCount: 500 })).toMatchObject({
       lives: 5,
       turnSeconds: 5,
-      mysteryFuse: true,
       questionCount: 30,
     });
   });

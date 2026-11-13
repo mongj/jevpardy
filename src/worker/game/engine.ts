@@ -3,10 +3,6 @@ import {
   BONUS_LIFE_POINTS,
   DEFAULT_SETTINGS,
   EMPTY_ROOM_MS,
-  FUSE_FLOOR_FACTOR,
-  FUSE_FLOOR_MIN_MS,
-  FUSE_MAX_FACTOR,
-  FUSE_MIN_FACTOR,
   HOST_GRACE_MS,
   LOBBY_IDLE_MS,
   LOG_LIMIT,
@@ -90,7 +86,6 @@ interface TurnRecord {
   id: number;
   playerId: string;
   startedAt: number;
-  /** Real deadline; hidden from clients when the fuse is a mystery. */
   deadline: number | null;
   durationMs: number | null;
   judging: { text: string; startedAt: number; remainingMs: number | null } | null;
@@ -142,8 +137,6 @@ export interface RoomState {
   turnCounter: number;
   turnOrder: string[];
   lap: number;
-  /** Mystery fuse: when the shared fuse pops (paused while Jev judges). */
-  fuseEndsAt: number | null;
   startingPlayers: number;
   answers: AcceptedAnswer[];
   log: Verdict[];
@@ -214,7 +207,6 @@ export function createRoom(opts: CreateRoomOptions, ctx: Pick<Ctx, "now">): Room
     turnCounter: 0,
     turnOrder: [],
     lap: 0,
-    fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
     log: [],
@@ -510,11 +502,10 @@ export function start(state: RoomState, actorId: string, ctx: Ctx): Result {
     ctx.rng,
   );
   state.lap = 1;
-  state.fuseEndsAt = null;
   state.history = [];
   touch(state, ctx);
   const events: GameEvent[] = [{ type: "gameStarted" }, ...openQuestion(state, 0, "start", ctx)];
-  events.push(...beginTurn(state, state.turnOrder[0]!, ctx, { freshFuse: true, reveal: true }));
+  events.push(...beginTurn(state, state.turnOrder[0]!, ctx, { reveal: true }));
   return { ok: true, events };
 }
 
@@ -563,27 +554,9 @@ export function questionEndReason(state: RoomState, nextPlayerId: string): Quest
   return null;
 }
 
-function fuseFloorMs(state: RoomState): number {
-  return Math.max(FUSE_FLOOR_MIN_MS, Math.round(state.settings.turnSeconds * 1000 * FUSE_FLOOR_FACTOR));
-}
-
-function beginTurn(state: RoomState, playerId: string, ctx: Ctx, opts: { freshFuse?: boolean; reveal?: boolean } = {}): GameEvent[] {
-  const base = state.settings.turnSeconds * 1000;
-  const reveal = opts.reveal ? QUESTION_REVEAL_MS : 0;
-  let deadline: number;
-  let durationMs: number;
-  if (state.settings.mysteryFuse) {
-    // One fuse for the whole table: passing it on keeps what's left, topped up to a floor.
-    if (opts.freshFuse || state.fuseEndsAt === null) {
-      state.fuseEndsAt = ctx.now + Math.round(base * (FUSE_MIN_FACTOR + ctx.rng() * (FUSE_MAX_FACTOR - FUSE_MIN_FACTOR)));
-    }
-    deadline = Math.max(state.fuseEndsAt, ctx.now + fuseFloorMs(state)) + reveal;
-    state.fuseEndsAt = deadline;
-    durationMs = deadline - ctx.now;
-  } else {
-    durationMs = base + reveal;
-    deadline = ctx.now + durationMs;
-  }
+function beginTurn(state: RoomState, playerId: string, ctx: Ctx, opts: { reveal?: boolean } = {}): GameEvent[] {
+  const durationMs = state.settings.turnSeconds * 1000 + (opts.reveal ? QUESTION_REVEAL_MS : 0);
+  const deadline = ctx.now + durationMs;
   state.turnCounter += 1;
   state.turn = {
     id: state.turnCounter,
@@ -612,7 +585,7 @@ function nextPlayerId(state: RoomState, afterId: string): { id: string; wrapped:
 }
 
 /** Ends the current turn: counts it against the question, rotates the question if it's done, and hands over. */
-function advanceTurn(state: RoomState, fromId: string, ctx: Ctx, opts: { freshFuse?: boolean } = {}): GameEvent[] {
+function advanceTurn(state: RoomState, fromId: string, ctx: Ctx): GameEvent[] {
   const over = checkGameOver(state, ctx);
   if (over.length > 0) return over;
   if (state.question) state.question.turns += 1;
@@ -625,7 +598,7 @@ function advanceTurn(state: RoomState, fromId: string, ctx: Ctx, opts: { freshFu
     if (state.phase !== "playing") return events;
   }
   if (next.wrapped) state.lap += 1;
-  events.push(...beginTurn(state, next.id, ctx, { freshFuse: opts.freshFuse, reveal: why !== null }));
+  events.push(...beginTurn(state, next.id, ctx, { reveal: why !== null }));
   return events;
 }
 
@@ -645,7 +618,6 @@ export function finish(state: RoomState, ctx: Pick<Ctx, "now">, reason: EndReaso
   state.endedAt = ctx.now;
   state.endReason = reason;
   state.turn = null;
-  state.fuseEndsAt = null;
   retireQuestion(state, null);
   // The mystery is over: reveal the questions the game never reached.
   const reached = new Set(state.history.map((h) => h.index));
@@ -815,7 +787,6 @@ export function resolve(state: RoomState, turnId: number, decision: Decision, ct
   const remaining = turn.judging.remainingMs;
   turn.judging = null;
   turn.deadline = remaining === null ? null : ctx.now + Math.max(remaining, 1000);
-  if (state.settings.mysteryFuse && turn.deadline !== null) state.fuseEndsAt = turn.deadline;
   touch(state, ctx);
   if (!player) return advanceTurn(state, turn.playerId, ctx);
 
@@ -948,8 +919,7 @@ function loseLife(state: RoomState, player: PlayerRecord, reason: LifeLostReason
   }
   if (state.turn?.playerId === player.id) {
     state.turn = null;
-    // A pop lights a brand-new fuse.
-    events.push(...advanceTurn(state, player.id, ctx, { freshFuse: true }));
+    events.push(...advanceTurn(state, player.id, ctx));
   } else {
     events.push(...checkGameOver(state, ctx));
   }
@@ -997,7 +967,6 @@ export function rematch(state: RoomState, actorId: string, ctx: Ctx): Result {
     turn: null,
     turnOrder: [],
     lap: 0,
-    fuseEndsAt: null,
     startingPlayers: 0,
     answers: [],
     log: [],
@@ -1075,14 +1044,13 @@ export function nextAlarmAt(state: RoomState): number {
 function publicTurn(state: RoomState): TurnInfo | null {
   const t = state.turn;
   if (!t) return null;
-  const hidden = state.settings.mysteryFuse;
   return {
     id: t.id,
     playerId: t.playerId,
     startedAt: t.startedAt,
-    deadline: hidden ? null : t.deadline,
-    durationMs: hidden ? null : t.durationMs,
-    frozenRemainingMs: hidden ? null : (t.judging?.remainingMs ?? null),
+    deadline: t.deadline,
+    durationMs: t.durationMs,
+    frozenRemainingMs: t.judging?.remainingMs ?? null,
     judging: t.judging ? { text: t.judging.text } : null,
     attempts: t.attempts,
   };

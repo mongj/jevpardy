@@ -5,10 +5,8 @@ export type Phase = "lobby" | "playing" | "over";
 export interface GameSettings {
   /** Starting lives per player. */
   lives: number;
-  /** Seconds per turn (or the average fuse when `mysteryFuse`). */
+  /** Seconds per turn. */
   turnSeconds: number;
-  /** One hidden fuse shared by the table that carries over when you pass it on (Puffer Party style). */
-  mysteryFuse: boolean;
   /** How many questions the deck holds. */
   questionCount: number;
 }
@@ -135,11 +133,11 @@ export interface TurnInfo {
   id: number;
   playerId: string;
   startedAt: number;
-  /** Absolute server epoch ms the turn ends. Null with a mystery fuse, or while Jev is judging. */
+  /** Absolute server epoch ms the turn ends. Null while Jev is judging. */
   deadline: number | null;
-  /** Visible length of the turn in ms (null with a mystery fuse). */
+  /** Length of the turn in ms. */
   durationMs: number | null;
-  /** Remaining ms frozen while Jev judges (visible clock only). */
+  /** Remaining ms frozen while Jev judges. */
   frozenRemainingMs: number | null;
   judging: { text: string } | null;
   attempts: number;

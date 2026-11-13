@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { MAX_ANSWER_LENGTH, ROUNDS_PER_QUESTION } from "../../shared/constants.ts";
 import { EMOTES, type ClientMessage, type PublicState, type Verdict } from "../../shared/protocol.ts";
 import { AnswerWall, QuestionTrail } from "../components/AnswerWall.tsx";
-import { Countdown, Fuse } from "../components/Countdown.tsx";
+import { Countdown } from "../components/Countdown.tsx";
 import { EMOTE_LABELS, EmoteArt, Icon, JevBot, type JevMood, Sprite } from "../components/Pixel.tsx";
 import { PlayerRail } from "../components/PlayerRail.tsx";
 import { Blink, PixelButton } from "../components/ui.tsx";
@@ -126,11 +126,7 @@ export function Game({ state, meId, offset, typing, send, mood, freshAnswerId, i
                 <p className="small muted">ATTEMPT {turn.attempts + (turn.judging ? 0 : 1)}</p>
               </div>
             </div>
-            {state.settings.mysteryFuse ? (
-              <Fuse turn={turn} offset={offset} averageMs={state.settings.turnSeconds * 1000} />
-            ) : (
-              <Countdown turn={turn} offset={offset} audible={myTurn} />
-            )}
+            <Countdown turn={turn} offset={offset} audible={myTurn} />
             <div className="jev-row">
               <JevBot mood={turn.judging ? "thinking" : mood} size={52} />
               <div className={`bubble ${turn.judging ? "judging" : ""}`}>

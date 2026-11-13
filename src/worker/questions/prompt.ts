@@ -1,7 +1,7 @@
 // The question writer's prompt and output schema. Kept apart from the transport so it's easy to review and tune.
 
 export const WRITER_SYSTEM_PROMPT = `You write questions for JEVPARDY, a multiplayer party game in the style of hot potato.
-Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns, so it must have MANY valid answers.
+Players take turns. On your turn you must name ONE thing that answers the current question before their turn timer runs out. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns, so it must have MANY valid answers.
 
 The host picks a topic but never sees the questions: they are a surprise for everyone. Write questions about the topic. Assume the players are casual fans of it: people who'd happily pick it for game night, not experts.
 
@@ -78,7 +78,7 @@ export const DUD_PROBLEMS = [
 export type DudProblem = (typeof DUD_PROBLEMS)[number];
 
 export const REVIEWER_SYSTEM_PROMPT = `You review questions for JEVPARDY, a multiplayer party game in the style of hot potato.
-Players take turns. On your turn you must name ONE thing that answers the current question before a hidden fuse pops. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns (often 10+ answers), so it needs MANY valid answers. The host picked the topic, so judge everything from the point of view of casual fans of it: people who'd happily pick it for game night, not experts.
+Players take turns. On your turn you must name ONE thing that answers the current question before their turn timer runs out. Answers can't repeat. An AI judge accepts or rejects each answer from general knowledge. The same question goes round the table for a few turns (often 10+ answers), so it needs MANY valid answers. The host picked the topic, so judge everything from the point of view of casual fans of it: people who'd happily pick it for game night, not experts.
 
 For each question, decide "keep" or "cut". Cut it if ANY of these problems applies, and name the main one:
 - multi_answer: the natural answer is a pair, a list, a sentence, a number or a date, not one short name or phrase ("Name a famous celebrity couple").

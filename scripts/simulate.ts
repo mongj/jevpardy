@@ -242,7 +242,7 @@ async function runTimed(): Promise<string[]> {
   bots[1]!.send({ type: "generate" });
   await wait(300);
   check("non-host cannot write questions", bots[1]!.errors.some((e) => e.startsWith("not_host")), failures);
-  setUpDeck(bots[0]!, ["European cities", "famous rivers"], { lives: 2, turnSeconds: 6, mysteryFuse: false, questionCount: 5 });
+  setUpDeck(bots[0]!, ["European cities", "famous rivers"], { lives: 2, turnSeconds: 6, questionCount: 5 });
   check("deck gets written", await until(bots[0]!, (s) => s.deck.status === "ready" && s.deck.ready === 5), failures);
   check("lobby never shows the questions", !JSON.stringify(bots[1]!.state).includes("Name "), failures);
   bots[1]!.send({ type: "start" });

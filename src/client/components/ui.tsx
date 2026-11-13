@@ -71,19 +71,6 @@ export function Stepper({
   );
 }
 
-export function Toggle({ label, hint, checked, onChange, disabled }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <label className={`toggle ${checked ? "on" : ""} ${disabled ? "disabled" : ""}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span className="toggle-box" aria-hidden="true" />
-      <span className="toggle-text">
-        <span className="toggle-label">{label}</span>
-        {hint && <span className="toggle-hint">{hint}</span>}
-      </span>
-    </label>
-  );
-}
-
 export function Modal({ children, onClose }: { children: ReactNode; onClose?: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose?.();

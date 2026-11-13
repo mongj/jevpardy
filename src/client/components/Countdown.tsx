@@ -46,31 +46,3 @@ export function Countdown({ turn, offset, audible }: { turn: TurnInfo; offset: n
     </div>
   );
 }
-
-/** Mystery fuse: no numbers, just a fizzing bomb that gets twitchier over time. */
-export function Fuse({ turn, offset, averageMs }: { turn: TurnInfo; offset: number; averageMs: number }) {
-  const now = useAnimationNow(!turn.judging) + offset;
-  const elapsed = Math.max(0, now - turn.startedAt);
-  const heat = Math.min(1, elapsed / averageMs);
-  const fuseLeft = Math.max(0.08, 1 - heat * 0.85);
-  return (
-    <div className={`fuse ${turn.judging ? "frozen" : ""}`} style={{ ["--heat" as string]: heat.toFixed(2) }} aria-label="mystery fuse burning">
-      <svg viewBox="0 0 60 16" width="100%" height="34" shapeRendering="crispEdges" aria-hidden="true">
-        <rect x="0" y="7" width={44 * fuseLeft} height="2" fill="#c9a26b" />
-        <g className="spark" transform={`translate(${44 * fuseLeft} 8)`}>
-          <rect x="-1" y="-1" width="2" height="2" fill="#fff" />
-          <rect x="-3" y="-3" width="1" height="1" fill="#ffd23f" />
-          <rect x="2" y="-2" width="1" height="1" fill="#ff8a3d" />
-          <rect x="1" y="2" width="1" height="1" fill="#ffd23f" />
-        </g>
-        <g transform="translate(46 2)">
-          <rect x="3" y="0" width="4" height="2" fill="#6b6799" />
-          <rect x="1" y="2" width="10" height="10" fill="#2a2650" />
-          <rect x="0" y="4" width="12" height="6" fill="#2a2650" />
-          <rect x="3" y="4" width="2" height="2" fill="#8a86b8" />
-        </g>
-      </svg>
-      <span className="fuse-label">{turn.judging ? "PAUSED" : "???"}</span>
-    </div>
-  );
-}

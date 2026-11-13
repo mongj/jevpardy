@@ -12,7 +12,7 @@ The whole thing is one Cloudflare Worker: static assets, an HTTP API, and one Du
 
 1. **Host** taps *HOST GAME* and lands straight in the new room's lobby (`/r/ABCD`), with a room code, a join link and a QR code to share.
 2. In the lobby, the host adds up to 5 topics and taps **WRITE QUESTIONS**.
-   - **Options:** a dropdown holds the question count (3–30, default 10), hearts and the average fuse.
+   - **Options:** a dropdown holds the question count (3–30, default 10), hearts and the turn length.
    - **Writing:** about 15 s (see below), while players join.
    - **Secrecy:** the questions are a mystery to everyone, **the host included**. The lobby only says "10 MYSTERY QUESTIONS READY", and the button turns into **START GAME**.
    - **Bad topics:** if a topic is too narrow or personal ("my cat Fluffy"), only the host sees a warning, with a one-tap broader suggestion ("TRY 'cats'"). The other topics fill its share.
@@ -20,7 +20,7 @@ The whole thing is one Cloudflare Worker: static assets, an HTTP API, and one Du
 3. **Players** open the link (or enter the code on the home screen) and pick a display name. No sign-up.
 4. Each question is revealed when it comes up. Players take turns naming one answer each. Jev judges it in about 250 ms:
    - ✔ **accepted**: it goes on the question's answer wall and you score points by rarity.
-   - ✘ **doesn't fit** / **repeat**: try again while the fuse burns.
+   - ✘ **doesn't fit** / **repeat**: try again while the clock runs.
 5. Questions rotate (see below). When the deck runs out, the game ends. The end screen recaps every question and reveals the ones the game never reached.
 
 Everyone (players, knocked-out players and spectators) sees the live state, including what the current player is typing.
@@ -36,22 +36,19 @@ A question moves on as soon as any of these is true:
 | **Stumped:** it beat 2 players (1 when only 2 are left) | A question that's beating people moves on fast |
 | **Stumped:** the turn would come back to someone it already beat | Nobody faces a question twice that already cost them |
 
-"Beat" means the fuse popped on them. There's no "skip question" button: duds are cut before the game starts (see [How the questions are written](#how-the-questions-are-written)).
+"Beat" means their clock ran out. There's no "skip question" button: duds are cut before the game starts (see [How the questions are written](#how-the-questions-are-written)).
 
 ### Rules
 
 There's one mode, Puffer Party's:
 
-- **Clock:** the **mystery fuse** (default), one hidden fuse shared by the table. Or a visible per-turn countdown (host sets 5–60 s).
+- **Clock:** a visible per-turn countdown (default 15 s, host sets 5–60 s). It pauses while Jev judges, and the first turn on a new question gets 1.8 s extra to read it.
 - **Lives:** 3 hearts (host sets 1–5).
-- **Fuse pops:** −1 ♥, the question counts as having beaten you, and the turn passes.
-- **Wrong or repeated answer:** no penalty, keep trying while the fuse burns (as in Puffer Party).
+- **Time runs out:** −1 ♥, the question counts as having beaten you, and the turn passes.
+- **Wrong or repeated answer:** no penalty, keep trying while the clock runs (as in Puffer Party).
 - **Out:** 0 ♥ = K.O. You keep spectating.
 - **Game ends:** when one player is left (**last one standing**), or when the deck runs out (survivors first, by points). A solo game plays to the last heart or the last question.
-- **Late joiners:** spectate until the next game. A disconnected player stays in the rotation, so their fuse simply pops.
-
-**The mystery fuse** works like Puffer Party's (measured: 10–30 s, 8 s floor). A fresh fuse burns for 0.6–1.8× the host's *average fuse* (default 15 s, so 9–27 s). When you answer, the next player inherits whatever's left, topped up to a floor of half the average. Answer fast and you leave the next player more time. After a pop, a fresh fuse starts. The fuse pauses while Jev judges, and the first turn on a new question gets 1.8 s extra to read it.
-
+- **Late joiners:** spectate until the next game. A disconnected player stays in the rotation, so their clock simply runs out.
 
 ### Scoring and rarity
 
@@ -73,10 +70,11 @@ Points also fill a **1UP meter**: every 300 points earns +1 ♥, up to 5. That's
 - **One page for hosting.** *HOST GAME* opens an empty room, and everything else happens in its lobby: there's no separate "new game" form. Writing only starts when the host taps WRITE QUESTIONS, never while they're still typing topics.
 - **Rewriting is cheap.** Each topic's questions are cached in the room, so after an edit only new topics cost writer calls. Edits made during a write keep what was written but mark the deck out of date.
 - **Rounds per question aren't a setting.** Three trips round the table is long enough to enjoy a good question; the stumped rules end bad ones sooner. Fewer knobs for the host.
-- **Wrong answers only cost time.** The fuse is the penalty, as in Puffer Party. An AI judge will occasionally misjudge, and a heart lost to a misjudgment feels bad. (The old *sudden death* and *speed up* toggles are gone: Puffer Party has neither.)
+- **Wrong answers only cost time.** The clock is the penalty, as in Puffer Party. An AI judge will occasionally misjudge, and a heart lost to a misjudgment feels bad. (The old *sudden death* and *speed up* toggles are gone: Puffer Party has neither.)
 - **The clock freezes while Jev judges.** Judging latency never costs a life.
 - **Last one standing wins**, and so does the top scorer still standing when the deck runs out, so points matter.
-- **No free mode.** Puffer Party has one mode, and the fuse is what makes it tense. A no-clock mode also needed a "pass" button, which made questions easy to dodge.
+- **No mystery fuse.** Puffer Party hides its fuse and passes what's left to the next player; here every turn gets the same visible countdown, so the clock is fair and readable.
+- **No free mode.** Puffer Party has one mode, and the clock is what makes it tense. A no-clock mode also needed a "pass" button, which made questions easy to dodge.
 - **Jev's call is final.** There's no overrule. The host can **skip a turn**, **kick** a player, **end** the game, or start a **rematch**, which goes back to the lobby with the same topics. Writing again gives fresh questions, never a repeat from this room.
 - **Host handover.** If the host is disconnected for 20 s, the crown passes to the next connected player.
 - **Awards on the end screen:** Last One Standing, High Score, All-Rounder (scored on the most questions), Rarest Find, Speed Demon and Jev's Nemesis.
@@ -207,7 +205,7 @@ All judge questions and thresholds live in [`src/worker/judge/questions.ts`](src
 
 ### Puffer Party, measured
 
-The rotation and fuse rules come from watching real Puffer Party games on krillion.io: its public client constants, plus the WebSocket traffic of a 1v1 and a 6-player quick-play game.
+The rotation rules come from watching real Puffer Party games on krillion.io: its public client constants, plus the WebSocket traffic of a 1v1 and a 6-player quick-play game.
 - **Defaults:** 2 lives (cap 5), 600 meter points per extra heart, 8 s minimum turn, 10–30 s hidden fuse, 6 seats.
 - **Scoring:** tiers from 10 points (the obvious answer) to 100 ("one in a krillion"), which also fill the heart meter.
 - **Answer caps:** each category carries an answer cap (12–20 in a 6-player game, 15 in 1v1).
@@ -258,13 +256,13 @@ src/
   worker/
     index.ts       HTTP router, exports GameRoom
     room.ts        GameRoom Durable Object (WebSockets, storage, alarms)
-    game/engine.ts pure game state machine: turns, fuse, question rotation (+ engine.test.ts)
+    game/engine.ts pure game state machine: turns, clock, question rotation (+ engine.test.ts)
     questions/     prompt.ts (writer prompt, dud rubric, schemas) · openai.ts (writer + reviewer) · mock.ts · deck.ts (pure: plan, vet, review, deal; + deck.test.ts)
     judge/         questions.ts (all Jev questions/thresholds) · jev.ts (judging + vetting) · mock.ts · index.ts · types.ts
   client/
     main.tsx, App.tsx, styles.css
     lib/           useRoom (WebSocket + reconnect) · identity · router · sfx (WebAudio chiptune) · clock
-    components/    Pixel (sprites, Jev, hearts) · Starfield · Countdown/Fuse · AnswerWall (+ trail, recap) · TopicChips · PlayerRail · FxLayer · QRCode · ui
+    components/    Pixel (sprites, Jev, hearts) · Starfield · Countdown · AnswerWall (+ trail, recap) · TopicChips · PlayerRail · FxLayer · QRCode · ui
     screens/       Home · JoinGate · Lobby (topics, options, write + start) · Game · GameOver · Room · HowToPlay · SettingsForm
 scripts/simulate.ts  bots that play full games over WebSocket (game, deck warnings)
 scripts/bench-questions.ts  benchmarks question writers: write → vet → blind-graded against the dud rubric
